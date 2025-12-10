@@ -8,26 +8,26 @@ interface Props {
 
 export default function WorkflowVisualization({ workflow, activeAgent, completedSteps }: Props) {
   return (
-    <div className="bg-gray-800/50 rounded-xl p-4 border border-purple-500/30">
+    <div className="bg-[#2f2f2f] rounded-xl p-4 border border-[#424242]">
       <div className="flex items-center justify-between mb-4">
         <div>
           <h3 className="font-medium text-white flex items-center gap-2">
-            <span>📋</span>
+            <span className="text-[#10a37f]">▷</span>
             {workflow.workflow_name}
           </h3>
-          <p className="text-sm text-gray-400 mt-1">{workflow.strategy}</p>
+          <p className="text-sm text-[#b4b4b4] mt-1">{workflow.strategy}</p>
         </div>
         <div className="flex items-center gap-2">
-          <span className={`px-2 py-1 rounded-full text-xs ${
-            workflow.complexity_level === 'simple' ? 'bg-green-500/20 text-green-400' :
-            workflow.complexity_level === 'moderate' ? 'bg-yellow-500/20 text-yellow-400' :
-            'bg-red-500/20 text-red-400'
+          <span className={`px-2 py-1 rounded text-xs ${
+            workflow.complexity_level === 'simple' ? 'bg-[#10a37f]/20 text-[#10a37f]' :
+            workflow.complexity_level === 'moderate' ? 'bg-[#f59e0b]/20 text-[#f59e0b]' :
+            'bg-[#ef4444]/20 text-[#ef4444]'
           }`}>
             {workflow.complexity_level}
           </span>
           {workflow.debate_enabled && (
-            <span className="px-2 py-1 bg-purple-500/20 text-purple-400 rounded-full text-xs">
-              ⚔️ Debate
+            <span className="px-2 py-1 bg-[#8b5cf6]/20 text-[#8b5cf6] rounded text-xs">
+              ⚔ Debate
             </span>
           )}
         </div>
@@ -46,27 +46,27 @@ export default function WorkflowVisualization({ workflow, activeAgent, completed
                 className={`
                   relative flex items-center gap-2 px-3 py-2 rounded-lg border transition-all
                   ${isActive 
-                    ? 'border-purple-500 bg-purple-500/20 animate-pulse' 
+                    ? 'border-[#10a37f] bg-[#10a37f]/10' 
                     : isComplete 
-                      ? 'border-green-500/50 bg-green-500/10' 
-                      : 'border-gray-700 bg-gray-800/50'
+                      ? 'border-[#10a37f]/50 bg-[#212121]' 
+                      : 'border-[#424242] bg-[#212121]'
                   }
                 `}
               >
                 <span className="text-lg">{step.icon}</span>
                 <div>
-                  <p className={`text-sm font-medium ${isActive ? 'text-purple-300' : isComplete ? 'text-green-300' : 'text-gray-300'}`}>
+                  <p className={`text-sm font-medium ${isActive ? 'text-[#10a37f]' : isComplete ? 'text-white' : 'text-[#b4b4b4]'}`}>
                     {step.agent_name}
                   </p>
-                  <p className="text-xs text-gray-500">{step.task}</p>
+                  <p className="text-xs text-[#565656]">{step.task}</p>
                 </div>
                 {isComplete && (
-                  <span className="absolute -top-1 -right-1 w-4 h-4 bg-green-500 rounded-full flex items-center justify-center text-xs">
+                  <span className="absolute -top-1 -right-1 w-4 h-4 bg-[#10a37f] rounded-full flex items-center justify-center text-xs text-white">
                     ✓
                   </span>
                 )}
                 {isActive && (
-                  <span className="absolute -top-1 -right-1 w-4 h-4 bg-purple-500 rounded-full flex items-center justify-center">
+                  <span className="absolute -top-1 -right-1 w-4 h-4 bg-[#10a37f] rounded-full flex items-center justify-center">
                     <span className="w-2 h-2 bg-white rounded-full animate-ping"></span>
                   </span>
                 )}
@@ -74,9 +74,7 @@ export default function WorkflowVisualization({ workflow, activeAgent, completed
               
               {/* Arrow to next step */}
               {index < workflow.steps.length - 1 && (
-                <svg className="w-6 h-6 text-gray-600 mx-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                </svg>
+                <span className="text-[#565656] mx-2">→</span>
               )}
             </div>
           );
@@ -85,13 +83,13 @@ export default function WorkflowVisualization({ workflow, activeAgent, completed
 
       {/* Progress Bar */}
       <div className="mt-4">
-        <div className="flex justify-between text-xs text-gray-500 mb-1">
+        <div className="flex justify-between text-xs text-[#565656] mb-1">
           <span>Progress</span>
           <span>{completedSteps.length} / {workflow.steps.length} steps</span>
         </div>
-        <div className="h-2 bg-gray-700 rounded-full overflow-hidden">
+        <div className="h-1.5 bg-[#212121] rounded-full overflow-hidden">
           <div 
-            className="h-full bg-gradient-to-r from-purple-500 to-pink-500 transition-all duration-500"
+            className="h-full bg-[#10a37f] rounded-full transition-all duration-500"
             style={{ width: `${(completedSteps.length / workflow.steps.length) * 100}%` }}
           />
         </div>

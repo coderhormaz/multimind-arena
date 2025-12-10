@@ -115,15 +115,15 @@ Agents: {list(AGENTS.keys())}
         complexity = max(0, min(100, complexity))
         
         # Select agents based on type
-        agents = ["gemini"]
+        agents = ["deepseek"]
         if query_type == "coding":
             agents = ["qwen_coder"]  # Single agent for coding
         elif query_type == "math":
             agents = ["deepseek"]  # Single agent for math
         elif query_type == "reasoning":
-            agents = ["gemini"]  # Single agent for reasoning
+            agents = ["deepseek"]  # Single agent for reasoning (was gemini - temp disabled)
         elif complexity > 70:
-            agents = ["gemini", "llama_judge"]  # Max 2 agents for complex
+            agents = ["deepseek", "llama_judge"]  # Max 2 agents for complex
         
         return {
             "query_type": query_type,
@@ -157,18 +157,19 @@ Agents: {list(AGENTS.keys())}
         complexity = analysis.get("complexity_score", 50)
         
         # Select primary and secondary agents based on query type
+        # NOTE: Gemini temporarily disabled due to rate limiting
         if query_type == "coding":
             primary_agent = "qwen_coder"
             secondary_agent = "gpt_critic"
         elif query_type == "math":
             primary_agent = "deepseek"
-            secondary_agent = "gemini"
+            secondary_agent = "llama_judge"
         elif query_type == "reasoning":
-            primary_agent = "gemini"
-            secondary_agent = "deepseek"
+            primary_agent = "deepseek"
+            secondary_agent = "llama_judge"
         else:
-            primary_agent = "gemini"
-            secondary_agent = "deepseek"
+            primary_agent = "deepseek"
+            secondary_agent = "llama_judge"
         
         # Always use 2 agents + synthesis
         steps = [
@@ -237,14 +238,15 @@ Agents: {list(AGENTS.keys())}
         complexity = analysis.get("complexity_score", 50)
         
         # Select best single agent for the task
+        # NOTE: Gemini temporarily disabled due to rate limiting
         if query_type == "coding":
             primary_agent = "qwen_coder"
         elif query_type == "math":
             primary_agent = "deepseek"
         elif query_type == "reasoning":
-            primary_agent = "gemini"
+            primary_agent = "deepseek"
         else:
-            primary_agent = "gemini"  # Default to fast reasoner
+            primary_agent = "deepseek"  # Default (was gemini - temp disabled)
         
         # Build simple workflow - just 1 agent for most queries
         steps = [{
@@ -339,7 +341,7 @@ Respond with ONLY JSON:
             agent_configs = {}
             
             for step in workflow.get("steps", []):
-                agent_id = step.get("agent_id", "gemini")
+                agent_id = step.get("agent_id", "deepseek")
                 if agent_id in AGENTS:
                     agent_config = AGENTS[agent_id]
                     enriched_step = {
@@ -372,38 +374,38 @@ Respond with ONLY JSON:
         steps = []
         agent_configs = {}
         
-        # Always start with fast reasoner
-        gemini = AGENTS["gemini"]
+        # Always start with fast reasoner (was gemini - temp disabled)
+        deepseek = AGENTS["deepseek"]
         steps.append({
             "step_number": 1,
-            "agent_id": "gemini",
-            "agent_name": gemini["name"],
-            "agent_role": gemini["role"],
+            "agent_id": "deepseek",
+            "agent_name": deepseek["name"],
+            "agent_role": deepseek["role"],
             "task": "initial_reasoning",
             "instruction": f"Analyze and provide initial answer to: {query[:200]}",
-            "icon": gemini["icon"],
-            "color": gemini["color"],
-            "model_id": gemini["id"],
+            "icon": deepseek["icon"],
+            "color": deepseek["color"],
+            "model_id": deepseek["id"],
             "depends_on": []
         })
-        agent_configs["gemini"] = gemini
+        agent_configs["deepseek"] = deepseek
         
         # Add more agents based on complexity
         if complexity > 40:
-            deepseek = AGENTS["deepseek"]
+            qwen = AGENTS["qwen_coder"]
             steps.append({
                 "step_number": 2,
-                "agent_id": "deepseek",
-                "agent_name": deepseek["name"],
-                "agent_role": deepseek["role"],
+                "agent_id": "qwen_coder",
+                "agent_name": qwen["name"],
+                "agent_role": qwen["role"],
                 "task": "deep_analysis",
                 "instruction": "Provide deeper analysis and alternative perspective",
-                "icon": deepseek["icon"],
-                "color": deepseek["color"],
-                "model_id": deepseek["id"],
+                "icon": qwen["icon"],
+                "color": qwen["color"],
+                "model_id": qwen["id"],
                 "depends_on": [1]
             })
-            agent_configs["deepseek"] = deepseek
+            agent_configs["qwen_coder"] = qwen
         
         if complexity > 60:
             critic = AGENTS["gpt_critic"]

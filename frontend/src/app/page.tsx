@@ -1,15 +1,15 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 
-// Agent model mapping for display
+// Agent model mapping for display - using symbols instead of emojis
 const AGENT_MODELS: Record<string, { model: string; icon: string; color: string; role: string }> = {
-  'gemini': { model: 'google/gemini-2.0-flash-exp:free', icon: '⚡', color: '#10B981', role: 'Fast Reasoner' },
-  'deepseek': { model: 'tngtech/deepseek-r1t-chimera:free', icon: '🔬', color: '#3B82F6', role: 'Deep Analyzer' },
-  'qwen_coder': { model: 'qwen/qwen3-coder:free', icon: '💻', color: '#F59E0B', role: 'Code Specialist' },
-  'gpt_critic': { model: 'openai/gpt-oss-20b:free', icon: '🔍', color: '#EF4444', role: 'Error Detector' },
-  'llama_judge': { model: 'meta-llama/llama-3.3-70b-instruct:free', icon: '⚖️', color: '#6366F1', role: 'Final Arbiter' },
-  'gemma': { model: 'google/gemma-3-27b-it:free', icon: '💎', color: '#EC4899', role: 'Balanced Reasoner' },
+  'gemini': { model: 'google/gemini-2.0-flash-exp:free', icon: '◇', color: '#10a37f', role: 'Fast Reasoner' },
+  'deepseek': { model: 'tngtech/deepseek-r1t-chimera:free', icon: '◈', color: '#3b82f6', role: 'Deep Analyzer' },
+  'qwen_coder': { model: 'qwen/qwen3-coder:free', icon: '⟨⟩', color: '#f59e0b', role: 'Code Specialist' },
+  'gpt_critic': { model: 'openai/gpt-oss-20b:free', icon: '◎', color: '#ef4444', role: 'Error Detector' },
+  'llama_judge': { model: 'meta-llama/llama-3.3-70b-instruct:free', icon: '⚖', color: '#8b5cf6', role: 'Final Arbiter' },
+  'gemma': { model: 'google/gemma-3-27b-it:free', icon: '◆', color: '#ec4899', role: 'Balanced Reasoner' },
 };
 
 interface QueryAnalysis {
@@ -52,6 +52,8 @@ interface AgentResponse {
   confidence: number;
   icon: string;
   color: string;
+  isStreaming?: boolean;
+  displayedContent?: string;
 }
 
 interface FinalAnswerData {
@@ -60,6 +62,8 @@ interface FinalAnswerData {
   strategy: string;
   source_agent: string;
   evaluated_responses?: number;
+  isStreaming?: boolean;
+  displayedContent?: string;
 }
 
 interface CompletionData {
@@ -69,6 +73,352 @@ interface CompletionData {
   correction_loops: number;
   final_confidence: number;
   workflow_name: string;
+}
+
+// Simple markdown renderer
+function renderMarkdown(text: string): React.ReactNode {
+  if (!text) return null;
+  
+  // Split into lines for processing
+  const lines = text.split('\n');
+  const elements: React.ReactNode[] = [];
+  let inCodeBlock = false;
+  let codeContent = '';
+  let codeLanguage = '';
+  
+  lines.forEach((line, lineIndex) => {
+    // Code block handling
+    if (line.startsWith('```')) {
+      if (!inCodeBlock) {
+        inCodeBlock = true;
+        codeLanguage = line.slice(3).trim();
+        codeContent = '';
+      } else {
+        inCodeBlock = false;
+        elements.push(
+          <pre key={`code-${lineIndex}`} className="bg-[#171717] rounded-lg p-3 my-2 overflow-x-auto">
+            <code className="text-sm font-mono text-[#e5e5e5]">{codeContent}</code>
+          </pre>
+        );
+      }
+      return;
+    }
+    
+    if (inCodeBlock) {
+      codeContent += (codeContent ? '\n' : '') + line;
+      return;
+    }
+    
+    // Process inline markdown
+    let processed: React.ReactNode = line;
+    
+    // Bold **text** or __text__
+    if (typeof processed === 'string') {
+      const boldRegex = /\*\*(.+?)\*\*|__(.+?)__/g;
+      const parts: React.ReactNode[] = [];
+      let lastIndex = 0;
+      let match;
+      
+      while ((match = boldRegex.exec(processed)) !== null) {
+        if (match.index > lastIndex) {
+          parts.push(processed.slice(lastIndex, match.index));
+        }
+        parts.push(<strong key={`bold-${lineIndex}-${match.index}`} className="font-semibold text-white">{match[1] || match[2]}</strong>);
+        lastIndex = match.index + match[0].length;
+      }
+      
+      if (parts.length > 0) {
+        if (lastIndex < processed.length) {
+          parts.push(processed.slice(lastIndex));
+        }
+        processed = parts;
+      }
+    }
+    
+    // Italic *text* or _text_ (but not inside bold)
+    if (typeof processed === 'string') {
+      const italicRegex = /(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)|(?<!_)_(?!_)(.+?)(?<!_)_(?!_)/g;
+      const parts: React.ReactNode[] = [];
+      let lastIndex = 0;
+      let match;
+      
+      while ((match = italicRegex.exec(processed)) !== null) {
+        if (match.index > lastIndex) {
+          parts.push(processed.slice(lastIndex, match.index));
+        }
+        parts.push(<em key={`italic-${lineIndex}-${match.index}`} className="italic text-[#d4d4d4]">{match[1] || match[2]}</em>);
+        lastIndex = match.index + match[0].length;
+      }
+      
+      if (parts.length > 0) {
+        if (lastIndex < processed.length) {
+          parts.push(processed.slice(lastIndex));
+        }
+        processed = parts;
+      }
+    }
+    
+    // Inline code `code`
+    if (typeof processed === 'string') {
+      const codeRegex = /`([^`]+)`/g;
+      const parts: React.ReactNode[] = [];
+      let lastIndex = 0;
+      let match;
+      
+      while ((match = codeRegex.exec(processed)) !== null) {
+        if (match.index > lastIndex) {
+          parts.push(processed.slice(lastIndex, match.index));
+        }
+        parts.push(<code key={`inline-${lineIndex}-${match.index}`} className="bg-[#171717] px-1.5 py-0.5 rounded text-sm font-mono text-[#f59e0b]">{match[1]}</code>);
+        lastIndex = match.index + match[0].length;
+      }
+      
+      if (parts.length > 0) {
+        if (lastIndex < processed.length) {
+          parts.push(processed.slice(lastIndex));
+        }
+        processed = parts;
+      }
+    }
+    
+    // Headers
+    if (typeof processed === 'string' && processed.startsWith('### ')) {
+      elements.push(<h3 key={`h3-${lineIndex}`} className="text-base font-semibold text-white mt-3 mb-1">{processed.slice(4)}</h3>);
+      return;
+    }
+    if (typeof processed === 'string' && processed.startsWith('## ')) {
+      elements.push(<h2 key={`h2-${lineIndex}`} className="text-lg font-semibold text-white mt-4 mb-2">{processed.slice(3)}</h2>);
+      return;
+    }
+    if (typeof processed === 'string' && processed.startsWith('# ')) {
+      elements.push(<h1 key={`h1-${lineIndex}`} className="text-xl font-bold text-white mt-4 mb-2">{processed.slice(2)}</h1>);
+      return;
+    }
+    
+    // Bullet points
+    if (typeof processed === 'string' && (processed.startsWith('- ') || processed.startsWith('* '))) {
+      elements.push(
+        <div key={`bullet-${lineIndex}`} className="flex gap-2 ml-2">
+          <span className="text-[#10a37f]">•</span>
+          <span>{processed.slice(2)}</span>
+        </div>
+      );
+      return;
+    }
+    
+    // Numbered lists
+    const numberedMatch = typeof processed === 'string' ? processed.match(/^(\d+)\.\s(.+)$/) : null;
+    if (numberedMatch) {
+      elements.push(
+        <div key={`num-${lineIndex}`} className="flex gap-2 ml-2">
+          <span className="text-[#10a37f] min-w-[1.5rem]">{numberedMatch[1]}.</span>
+          <span>{numberedMatch[2]}</span>
+        </div>
+      );
+      return;
+    }
+    
+    // Empty lines
+    if (line.trim() === '') {
+      elements.push(<div key={`empty-${lineIndex}`} className="h-2" />);
+      return;
+    }
+    
+    // Regular paragraph
+    elements.push(<p key={`p-${lineIndex}`} className="mb-1">{processed}</p>);
+  });
+  
+  return elements;
+}
+
+// Typing effect hook - using refs to avoid stale closures
+function useTypingEffect(text: string, speed: number = 10, enabled: boolean = true) {
+  const [displayedText, setDisplayedText] = useState('');
+  const [isComplete, setIsComplete] = useState(false);
+  const indexRef = useRef(0);
+  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  
+  useEffect(() => {
+    // Clear any existing interval
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+    
+    if (!enabled) {
+      setDisplayedText(text || '');
+      setIsComplete(true);
+      return;
+    }
+    
+    // Reset for new text
+    indexRef.current = 0;
+    setDisplayedText('');
+    setIsComplete(false);
+    
+    if (!text) {
+      setIsComplete(true);
+      return;
+    }
+    
+    intervalRef.current = setInterval(() => {
+      if (indexRef.current < text.length) {
+        const chunkSize = Math.min(3, text.length - indexRef.current);
+        const newText = text.slice(0, indexRef.current + chunkSize);
+        setDisplayedText(newText);
+        indexRef.current += chunkSize;
+      } else {
+        setIsComplete(true);
+        if (intervalRef.current) {
+          clearInterval(intervalRef.current);
+          intervalRef.current = null;
+        }
+      }
+    }, speed);
+    
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+    };
+  }, [text, speed, enabled]);
+  
+  return { displayedText, isComplete };
+}
+
+// Streaming text component with markdown support
+function StreamingText({ 
+  text, 
+  isStreaming, 
+  onComplete,
+  useMarkdown = true
+}: { 
+  text: string; 
+  isStreaming: boolean;
+  onComplete?: () => void;
+  useMarkdown?: boolean;
+}) {
+  const { displayedText, isComplete } = useTypingEffect(text, 6, isStreaming);
+  const onCompleteCalledRef = useRef(false);
+  const onCompleteRef = useRef(onComplete);
+  
+  // Keep onComplete ref updated
+  useEffect(() => {
+    onCompleteRef.current = onComplete;
+  }, [onComplete]);
+  
+  // Reset the called flag when text changes (new streaming session)
+  useEffect(() => {
+    onCompleteCalledRef.current = false;
+  }, [text]);
+  
+  useEffect(() => {
+    if (isComplete && !onCompleteCalledRef.current && onCompleteRef.current) {
+      onCompleteCalledRef.current = true;
+      onCompleteRef.current();
+    }
+  }, [isComplete]);
+  
+  return (
+    <div>
+      {useMarkdown ? renderMarkdown(displayedText) : displayedText}
+      {isStreaming && !isComplete && (
+        <span className="inline-block w-2 h-4 bg-[#10a37f] ml-0.5 animate-pulse align-text-bottom" />
+      )}
+    </div>
+  );
+}
+
+// Collapsible Agent Response component
+function CollapsibleAgentResponse({
+  response,
+  index,
+  isExpanded,
+  isStreaming,
+  onToggle,
+  onStreamComplete
+}: {
+  response: AgentResponse;
+  index: number;
+  isExpanded: boolean;
+  isStreaming: boolean;
+  onToggle: () => void;
+  onStreamComplete: () => void;
+}) {
+  const agentInfo = AGENT_MODELS[response.agent_id];
+  
+  return (
+    <div className="animate-slideUp" style={{ animationDelay: `${index * 0.03}s` }}>
+      <div className={`bg-[#2f2f2f] rounded-lg border transition-all duration-300 ${
+        isStreaming ? 'border-[#10a37f]/50' : 'border-[#424242]'
+      }`}>
+        {/* Clickable Header */}
+        <button 
+          onClick={onToggle}
+          className="w-full px-3 py-2 flex items-center justify-between hover:bg-[#3a3a3a] rounded-lg transition-colors"
+        >
+          <div className="flex items-center gap-2">
+            <span style={{ color: response.color || agentInfo?.color || '#b4b4b4' }}>
+              {agentInfo?.icon || '○'}
+            </span>
+            <span className="font-medium text-white text-xs">{response.agent_name}</span>
+            <span className="text-xs text-[#565656]">•</span>
+            <span className="text-xs text-[#b4b4b4] truncate max-w-[200px]">{response.task}</span>
+            {isStreaming && (
+              <div className="flex gap-0.5 ml-1">
+                <span className="w-1 h-1 bg-[#10a37f] rounded-full thinking-dot"></span>
+                <span className="w-1 h-1 bg-[#10a37f] rounded-full thinking-dot"></span>
+                <span className="w-1 h-1 bg-[#10a37f] rounded-full thinking-dot"></span>
+              </div>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <span className={`text-xs ${
+              response.confidence >= 80 ? 'text-[#10a37f]' :
+              response.confidence >= 60 ? 'text-[#f59e0b]' : 'text-[#ef4444]'
+            }`}>
+              {response.confidence}%
+            </span>
+            <svg 
+              className={`w-3 h-3 text-[#565656] transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}
+              fill="none" 
+              stroke="currentColor" 
+              viewBox="0 0 24 24"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </div>
+        </button>
+        
+        {/* Collapsible Content */}
+        <div className={`overflow-hidden transition-all duration-300 ${
+          isExpanded ? 'max-h-[2000px] opacity-100' : 'max-h-0 opacity-0'
+        }`}>
+          <div className="px-3 pb-3 pt-0">
+            <div className="text-[#ececec] text-xs leading-relaxed">
+              <StreamingText 
+                text={response.content} 
+                isStreaming={isStreaming}
+                onComplete={onStreamComplete}
+              />
+            </div>
+            
+            {/* Confidence bar */}
+            <div className="mt-2 h-0.5 bg-[#212121] rounded-full overflow-hidden">
+              <div 
+                className={`h-full rounded-full transition-all duration-500 ${
+                  response.confidence >= 80 ? 'bg-[#10a37f]' :
+                  response.confidence >= 60 ? 'bg-[#f59e0b]' : 'bg-[#ef4444]'
+                }`}
+                style={{ width: `${response.confidence}%` }}
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export default function Home() {
@@ -85,33 +435,99 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [selfCorrections, setSelfCorrections] = useState<number>(0);
   const [elapsedTime, setElapsedTime] = useState<number>(0);
+  const [expandedAgents, setExpandedAgents] = useState<Set<number>>(new Set());
+  const [streamingIndex, setStreamingIndex] = useState<number | null>(null);
+  const [thinkingExpanded, setThinkingExpanded] = useState(false);
+  const [userHasScrolled, setUserHasScrolled] = useState(false);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  };
+  // Smart scroll - only auto-scroll if user is near bottom
+  const scrollToBottom = useCallback(() => {
+    if (!userHasScrolled && messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [userHasScrolled]);
+
+  // Track if user scrolls up - use ref to avoid state updates during scroll
+  const userScrolledRef = useRef(false);
+  const handleScroll = useCallback(() => {
+    if (scrollContainerRef.current) {
+      const { scrollTop, scrollHeight, clientHeight } = scrollContainerRef.current;
+      const isNearBottom = scrollHeight - scrollTop - clientHeight < 100;
+      const newValue = !isNearBottom;
+      // Only update state if value actually changed
+      if (userScrolledRef.current !== newValue) {
+        userScrolledRef.current = newValue;
+        setUserHasScrolled(newValue);
+      }
+    }
+  }, []);
+
+  // Reset scroll tracking when new query starts
+  useEffect(() => {
+    if (isProcessing) {
+      setUserHasScrolled(false);
+    }
+  }, [isProcessing]);
 
   useEffect(() => {
     scrollToBottom();
-  }, [responses, finalAnswer, activeAgent]);
+  }, [responses, finalAnswer, activeAgent, userHasScrolled]);
 
   useEffect(() => {
+    // Clear any existing timer first
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+    
     if (isProcessing) {
       setElapsedTime(0);
       timerRef.current = setInterval(() => {
         setElapsedTime(prev => prev + 0.1);
       }, 100);
-    } else {
+    }
+    
+    return () => {
       if (timerRef.current) {
         clearInterval(timerRef.current);
+        timerRef.current = null;
       }
-    }
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
     };
   }, [isProcessing]);
+
+  // Auto-expand the currently streaming agent and collapse others
+  useEffect(() => {
+    if (streamingIndex !== null) {
+      setExpandedAgents(new Set([streamingIndex]));
+    }
+  }, [streamingIndex]);
+
+  // Memoized callback for stream completion
+  const handleStreamComplete = useCallback((index: number) => {
+    setResponses(prev => {
+      // Check if already marked as not streaming to prevent duplicate updates
+      if (!prev[index]?.isStreaming) return prev;
+      return prev.map((r, i) => 
+        i === index ? { ...r, isStreaming: false } : r
+      );
+    });
+  }, []);
+
+  const toggleAgentExpand = (index: number) => {
+    setExpandedAgents(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(index)) {
+        newSet.delete(index);
+      } else {
+        newSet.add(index);
+      }
+      return newSet;
+    });
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -119,7 +535,7 @@ export default function Home() {
 
     setIsProcessing(true);
     setCurrentPhase('starting');
-    setPhaseMessage('🚀 Initializing Master Controller...');
+    setPhaseMessage('Initializing Master Controller...');
     setAnalysis(null);
     setWorkflow(null);
     setResponses([]);
@@ -177,19 +593,19 @@ export default function Home() {
     switch (data.type) {
       case 'master_start':
         setCurrentPhase('analyzing');
-        setPhaseMessage('🧠 Master Controller analyzing your query...');
+        setPhaseMessage('Master Controller analyzing your query...');
         break;
       
       case 'analysis_complete':
         setAnalysis(data.analysis);
         setCurrentPhase('designing');
-        setPhaseMessage('📋 Designing optimal workflow...');
+        setPhaseMessage('Designing optimal workflow...');
         break;
       
       case 'workflow_designed':
         setWorkflow(data.workflow);
         setCurrentPhase('executing');
-        setPhaseMessage('⚡ Starting workflow execution...');
+        setPhaseMessage('Starting workflow execution...');
         break;
       
       case 'agent_start':
@@ -198,20 +614,21 @@ export default function Home() {
           name: data.agent_name,
           task: data.task
         });
-        setPhaseMessage(`${data.icon || '🤖'} ${data.agent_name} is working on: ${data.task}`);
+        setPhaseMessage(`${data.agent_name} is working on: ${data.task}`);
         break;
       
       case 'agent_waiting':
-        // Show waiting status when agent is rate limited
-        setPhaseMessage(`⏳ ${data.agent_name || 'Agent'} waiting for API (${data.wait_time || ''}s)... Free tier rate limit`);
+        setPhaseMessage(`${data.agent_name || 'Agent'} waiting for API (${data.wait_time || ''}s)... Rate limit`);
         break;
       
       case 'agent_retry':
-        // Show retry status
-        setPhaseMessage(`🔄 ${data.agent_name || 'Agent'} retrying (attempt ${data.attempt || '?'})...`);
+        setPhaseMessage(`${data.agent_name || 'Agent'} retrying (attempt ${data.attempt || '?'})...`);
         break;
       
       case 'agent_complete':
+        // Add response with streaming flag
+        const newIndex = responses.length;
+        setStreamingIndex(newIndex);
         setResponses(prev => [...prev, {
           step_number: data.step,
           agent_id: data.agent_id,
@@ -221,35 +638,42 @@ export default function Home() {
           confidence: data.confidence,
           icon: data.icon,
           color: data.color,
+          isStreaming: true,
+          displayedContent: ''
         }]);
         setActiveAgent(null);
         break;
       
       case 'routing':
-        setPhaseMessage(`🔄 Routing: ${data.from_agent} → ${data.to_agent}`);
+        setPhaseMessage(`Routing: ${data.from_agent} → ${data.to_agent}`);
         break;
       
       case 'self_correction':
         setSelfCorrections(prev => prev + 1);
         setCurrentPhase('self_correcting');
-        setPhaseMessage(`🔄 Self-correction loop ${data.loop}: ${data.reason}`);
+        setPhaseMessage(`Self-correction loop ${data.loop}: ${data.reason}`);
         break;
       
       case 'synthesizing':
         setCurrentPhase('synthesizing');
-        setPhaseMessage('✨ Synthesizing final answer from all responses...');
+        setPhaseMessage('Synthesizing final answer from all responses...');
         break;
       
       case 'final_answer':
+        // Collapse all agent responses when final answer starts
+        setExpandedAgents(new Set());
+        setStreamingIndex(null);
         setFinalAnswer({
           content: data.content,
           confidence: data.confidence,
           strategy: data.strategy,
           source_agent: data.source_agent,
-          evaluated_responses: data.evaluated_responses
+          evaluated_responses: data.evaluated_responses,
+          isStreaming: true,
+          displayedContent: ''
         });
         setCurrentPhase('complete');
-        setPhaseMessage('✅ Complete!');
+        setPhaseMessage('Complete!');
         break;
       
       case 'complete':
@@ -282,443 +706,400 @@ export default function Home() {
   };
 
   return (
-    <main className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900/50 to-gray-900">
-      {/* Header */}
-      <header className="border-b border-purple-500/30 bg-black/40 backdrop-blur-md sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 py-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-xl">
-                🧠
-              </div>
-              <div>
-                <h1 className="text-xl font-bold bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
-                  Master Controller AI
-                </h1>
-                <p className="text-xs text-gray-400">6 Specialized Agents • Dynamic Workflows</p>
-              </div>
+    <main className="h-screen flex flex-col bg-[#212121]">
+      {/* Compact Header */}
+      <header className="flex-shrink-0 border-b border-[#424242] bg-[#212121]">
+        <div className="max-w-3xl mx-auto px-4 py-2 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="w-7 h-7 rounded-lg bg-[#10a37f] flex items-center justify-center">
+              <span className="text-white font-bold text-sm">◈</span>
             </div>
-            <div className="flex items-center gap-3">
-              {isProcessing && (
-                <div className="flex items-center gap-2 px-3 py-1.5 bg-purple-500/20 rounded-full">
-                  <div className="w-2 h-2 bg-purple-400 rounded-full animate-pulse"></div>
-                  <span className="text-sm text-purple-300">{elapsedTime.toFixed(1)}s</span>
-                </div>
-              )}
-              <span className="px-2 py-1 bg-green-500/20 text-green-400 rounded-full text-xs font-medium">
-                ● Online
-              </span>
+            <div>
+              <h1 className="text-sm font-semibold text-white">Master Controller AI</h1>
+              <p className="text-[10px] text-[#565656]">6 Agents • Dynamic Workflows</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            {isProcessing && (
+              <div className="flex items-center gap-1.5 px-2 py-1 bg-[#2f2f2f] rounded-full border border-[#424242]">
+                <div className="w-1.5 h-1.5 bg-[#10a37f] rounded-full animate-pulse"></div>
+                <span className="text-xs text-[#b4b4b4] font-mono">{elapsedTime.toFixed(1)}s</span>
+              </div>
+            )}
+            <div className="flex items-center gap-1 px-2 py-0.5 bg-[#2f2f2f] rounded-full border border-[#424242]">
+              <span className="w-1.5 h-1.5 bg-[#10a37f] rounded-full status-online"></span>
+              <span className="text-[10px] text-[#10a37f]">Online</span>
             </div>
           </div>
         </div>
       </header>
 
-      {/* Available Models Banner */}
-      <div className="bg-gray-800/30 border-b border-gray-700/50 py-3">
-        <div className="max-w-7xl mx-auto px-4">
-          <p className="text-xs text-gray-500 mb-2">🤖 Available AI Models:</p>
-          <div className="flex flex-wrap gap-2">
-            {Object.entries(AGENT_MODELS).map(([id, info]) => (
-              <div 
-                key={id} 
-                className="flex items-center gap-2 px-3 py-1.5 bg-gray-800/70 rounded-lg border border-gray-700/50 hover:border-purple-500/50 transition-colors"
-              >
-                <span className="text-lg">{info.icon}</span>
-                <div>
-                  <p className="text-xs text-white font-medium">{info.role}</p>
-                  <p className="text-[10px] text-gray-500 font-mono">{info.model}</p>
+      {/* Main Chat Container */}
+      <div className="flex-1 overflow-hidden flex flex-col">
+        {/* Messages Area */}
+        <div 
+          ref={scrollContainerRef}
+          onScroll={handleScroll}
+          className="flex-1 overflow-y-auto scrollbar-thin"
+        >
+          <div className="max-w-3xl mx-auto px-4 py-4 space-y-4">
+            
+            {/* Welcome State */}
+            {currentPhase === 'idle' && responses.length === 0 && !finalAnswer && (
+              <div className="text-center py-10 animate-fadeIn">
+                <div className="w-12 h-12 mx-auto mb-4 rounded-xl bg-[#2f2f2f] border border-[#424242] flex items-center justify-center">
+                  <span className="text-2xl text-[#10a37f]">◈</span>
                 </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      <div className="max-w-7xl mx-auto px-4 py-6">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          
-          {/* Left Sidebar */}
-          <div className="lg:col-span-4 space-y-4">
-            {/* Query Input */}
-            <div className="bg-gray-800/50 rounded-xl p-4 border border-purple-500/30">
-              <form onSubmit={handleSubmit}>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  💬 Ask anything...
-                </label>
-                <textarea
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                  placeholder="e.g., Explain quantum computing, Write a sorting algorithm..."
-                  className="w-full h-28 px-4 py-3 bg-gray-900/50 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-purple-500 resize-none text-sm"
-                  disabled={isProcessing}
-                />
-                <button
-                  type="submit"
-                  disabled={isProcessing || !query.trim()}
-                  className="w-full mt-3 px-4 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg font-medium hover:from-purple-500 hover:to-pink-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
-                >
-                  {isProcessing ? (
-                    <>
-                      <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                      </svg>
-                      Processing...
-                    </>
-                  ) : (
-                    <>🚀 Submit Query</>
-                  )}
-                </button>
-              </form>
-            </div>
-
-            {/* Live Status */}
-            {currentPhase !== 'idle' && (
-              <div className="bg-gray-800/50 rounded-xl p-4 border border-purple-500/30">
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-sm font-medium text-gray-400">📡 Live Status</h3>
-                  {isProcessing && (
-                    <div className="flex gap-1">
-                      <div className="w-1.5 h-1.5 bg-green-400 rounded-full animate-bounce"></div>
-                      <div className="w-1.5 h-1.5 bg-green-400 rounded-full animate-bounce" style={{animationDelay: '0.1s'}}></div>
-                      <div className="w-1.5 h-1.5 bg-green-400 rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></div>
-                    </div>
-                  )}
-                </div>
-                <p className="text-white text-sm font-medium">{phaseMessage}</p>
+                <h2 className="text-xl font-semibold text-white mb-1">What can I help you with?</h2>
+                <p className="text-sm text-[#b4b4b4] mb-6 max-w-md mx-auto">
+                  Ask anything — I'll route your query through specialized AI agents.
+                </p>
                 
-                {activeAgent && (
-                  <div className="mt-3 p-3 bg-purple-500/10 border border-purple-500/30 rounded-lg">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full bg-purple-500/30 flex items-center justify-center">
-                        <svg className="animate-spin h-5 w-5 text-purple-400" viewBox="0 0 24 24">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                        </svg>
-                      </div>
-                      <div>
-                        <p className="text-purple-300 font-medium">{activeAgent.name}</p>
-                        <p className="text-purple-400/70 text-xs">{activeAgent.task}</p>
-                        {AGENT_MODELS[activeAgent.id] && (
-                          <p className="text-[10px] text-gray-500 font-mono mt-0.5">
-                            {AGENT_MODELS[activeAgent.id].model}
-                          </p>
-                        )}
-                      </div>
+                {/* Agent Pills */}
+                <div className="flex flex-wrap justify-center gap-1.5 mb-6">
+                  {Object.entries(AGENT_MODELS).map(([id, info]) => (
+                    <div 
+                      key={id} 
+                      className="flex items-center gap-1.5 px-2 py-1 bg-[#2f2f2f] rounded-full border border-[#424242] hover:border-[#565656] transition-colors cursor-default"
+                    >
+                      <span className="text-sm" style={{ color: info.color }}>{info.icon}</span>
+                      <span className="text-xs text-[#b4b4b4]">{info.role}</span>
                     </div>
-                  </div>
-                )}
+                  ))}
+                </div>
 
-                {selfCorrections > 0 && (
-                  <div className="mt-3 p-2 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
-                    <p className="text-yellow-400 text-sm">🔄 Self-corrections: {selfCorrections}</p>
-                  </div>
-                )}
+                {/* Quick prompts */}
+                <div className="grid grid-cols-2 gap-2 max-w-md mx-auto">
+                  {[
+                    'Explain quantum computing',
+                    'Write a sorting algorithm',
+                    'Compare REST vs GraphQL',
+                    'Debug my Python code'
+                  ].map((prompt, i) => (
+                    <button
+                      key={i}
+                      onClick={() => setQuery(prompt)}
+                      className="px-3 py-2 bg-[#2f2f2f] border border-[#424242] rounded-lg text-xs text-[#ececec] hover:bg-[#3a3a3a] hover:border-[#565656] transition-all text-left group"
+                    >
+                      <span className="text-[#b4b4b4] group-hover:text-[#ececec] transition-colors">{prompt}</span>
+                      <span className="text-[#565656] ml-1">→</span>
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
 
             {/* Analysis Card */}
             {analysis && (
-              <div className="bg-gray-800/50 rounded-xl p-4 border border-blue-500/30">
-                <h3 className="text-sm font-medium text-blue-400 mb-3 flex items-center gap-2">
-                  📊 Query Analysis
-                </h3>
+              <div className="bg-[#2f2f2f] rounded-lg p-3 border border-[#424242] animate-slideUp">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-[#10a37f] text-sm">◇</span>
+                  <span className="text-xs font-medium text-white">Query Analysis</span>
+                  <div className="ml-auto flex gap-1">
+                    {analysis.requires_debate && <span className="text-xs px-1 py-0.5 bg-[#8b5cf6]/20 text-[#8b5cf6] rounded">⚔</span>}
+                    {analysis.requires_deep_analysis && <span className="text-xs px-1 py-0.5 bg-[#3b82f6]/20 text-[#3b82f6] rounded">◈</span>}
+                    {analysis.requires_coding && <span className="text-xs px-1 py-0.5 bg-[#f59e0b]/20 text-[#f59e0b] rounded">⟨⟩</span>}
+                  </div>
+                </div>
                 
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-gray-400 text-xs">Type</span>
-                    <span className="text-white text-sm capitalize px-2 py-0.5 bg-blue-500/20 rounded">{analysis.query_type}</span>
-                  </div>
-                  
-                  <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-gray-400 text-xs">Complexity</span>
-                      <span className="text-white text-sm">{analysis.complexity_score}/100</span>
-                    </div>
-                    <div className="h-2 bg-gray-700 rounded-full overflow-hidden">
-                      <div 
-                        className={`h-full transition-all duration-500 ${
-                          analysis.complexity_score > 70 ? 'bg-red-500' :
-                          analysis.complexity_score > 40 ? 'bg-yellow-500' : 'bg-green-500'
-                        }`}
-                        style={{ width: `${analysis.complexity_score}%` }}
-                      />
-                    </div>
-                  </div>
+                <div className="flex items-center gap-4 text-xs mb-2">
+                  <span className="text-[#b4b4b4]">Type: <span className="text-white capitalize">{analysis.query_type}</span></span>
+                  <span className="text-[#b4b4b4]">Complexity: <span className="text-white">{analysis.complexity_score}/100</span></span>
+                  <span className="text-[#b4b4b4]">Rounds: <span className="text-white">{analysis.estimated_rounds}</span></span>
+                </div>
 
-                  <div className="flex flex-wrap gap-1">
-                    {analysis.requires_debate && (
-                      <span className="text-xs px-2 py-0.5 bg-purple-500/20 text-purple-300 rounded">⚔️ Debate</span>
-                    )}
-                    {analysis.requires_deep_analysis && (
-                      <span className="text-xs px-2 py-0.5 bg-blue-500/20 text-blue-300 rounded">🔬 Deep</span>
-                    )}
-                    {analysis.requires_coding && (
-                      <span className="text-xs px-2 py-0.5 bg-amber-500/20 text-amber-300 rounded">💻 Code</span>
-                    )}
-                  </div>
-
-                  {analysis.recommended_agents.length > 0 && (
-                    <div>
-                      <span className="text-gray-400 text-xs">Selected Agents</span>
-                      <div className="flex flex-wrap gap-1 mt-1">
-                        {analysis.recommended_agents.map((agentId, i) => {
-                          const agent = AGENT_MODELS[agentId];
-                          return agent ? (
-                            <span key={i} className="text-xs px-2 py-0.5 bg-gray-700 text-gray-300 rounded flex items-center gap-1">
-                              {agent.icon} {agent.role}
-                            </span>
-                          ) : null;
-                        })}
-                      </div>
-                    </div>
-                  )}
+                {/* Complexity bar */}
+                <div className="h-1 bg-[#212121] rounded-full overflow-hidden">
+                  <div 
+                    className={`h-full transition-all duration-500 rounded-full ${
+                      analysis.complexity_score > 70 ? 'bg-[#ef4444]' :
+                      analysis.complexity_score > 40 ? 'bg-[#f59e0b]' : 'bg-[#10a37f]'
+                    }`}
+                    style={{ width: `${analysis.complexity_score}%` }}
+                  />
                 </div>
               </div>
             )}
 
-            {/* Completion Stats */}
-            {completionData && (
-              <div className="bg-gray-800/50 rounded-xl p-4 border border-green-500/30">
-                <h3 className="text-sm font-medium text-green-400 mb-3">✅ Completion Stats</h3>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="text-center p-2 bg-gray-900/50 rounded-lg">
-                    <p className="text-xl font-bold text-white">{completionData.total_time.toFixed(1)}s</p>
-                    <p className="text-xs text-gray-400">Time</p>
-                  </div>
-                  <div className="text-center p-2 bg-gray-900/50 rounded-lg">
-                    <p className="text-xl font-bold text-white">{completionData.total_steps}</p>
-                    <p className="text-xs text-gray-400">Steps</p>
-                  </div>
-                  <div className="text-center p-2 bg-gray-900/50 rounded-lg">
-                    <p className="text-xl font-bold text-white">{completionData.total_agents}</p>
-                    <p className="text-xs text-gray-400">Agents</p>
-                  </div>
-                  <div className="text-center p-2 bg-gray-900/50 rounded-lg">
-                    <p className={`text-xl font-bold ${getConfidenceColor(completionData.final_confidence)}`}>
-                      {completionData.final_confidence}%
-                    </p>
-                    <p className="text-xs text-gray-400">Confidence</p>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Main Content */}
-          <div className="lg:col-span-8 space-y-4">
-            
-            {/* Workflow Visualization */}
+            {/* Workflow Progress */}
             {workflow && (
-              <div className="bg-gray-800/50 rounded-xl p-4 border border-purple-500/30">
-                <div className="flex items-center justify-between mb-4">
-                  <div>
-                    <h3 className="font-medium text-white flex items-center gap-2">
-                      📋 {workflow.name}
-                    </h3>
-                    <p className="text-sm text-gray-400 mt-0.5">{workflow.strategy}</p>
-                  </div>
+              <div className="bg-[#2f2f2f] rounded-lg p-3 border border-[#424242] animate-slideUp">
+                <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2">
-                    <span className={`px-2 py-1 rounded-full text-xs ${
-                      workflow.complexity === 'simple' ? 'bg-green-500/20 text-green-400' :
-                      workflow.complexity === 'moderate' ? 'bg-yellow-500/20 text-yellow-400' :
-                      'bg-red-500/20 text-red-400'
+                    <span className="text-[#10a37f] text-sm">▷</span>
+                    <span className="text-xs font-medium text-white">{workflow.name}</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className={`px-1.5 py-0.5 rounded text-xs ${
+                      workflow.complexity === 'simple' ? 'bg-[#10a37f]/20 text-[#10a37f]' :
+                      workflow.complexity === 'moderate' ? 'bg-[#f59e0b]/20 text-[#f59e0b]' :
+                      'bg-[#ef4444]/20 text-[#ef4444]'
                     }`}>
                       {workflow.complexity}
                     </span>
                     {workflow.debate_enabled && (
-                      <span className="px-2 py-1 bg-purple-500/20 text-purple-400 rounded-full text-xs">⚔️ Debate</span>
+                      <span className="px-1.5 py-0.5 bg-[#8b5cf6]/20 text-[#8b5cf6] rounded text-xs">⚔</span>
                     )}
                   </div>
                 </div>
 
-                {/* Pipeline Steps */}
-                <div className="flex flex-wrap items-center gap-2 mb-4">
+                {/* Steps */}
+                <div className="flex flex-wrap gap-1.5 mb-2">
                   {workflow.steps.map((step, index) => {
                     const isActive = activeAgent?.id === step.agent;
                     const isComplete = responses.some(r => r.step_number === step.step);
                     const agentInfo = AGENT_MODELS[step.agent];
                     
                     return (
-                      <div key={index} className="flex items-center">
-                        <div 
-                          className={`relative p-3 rounded-lg border transition-all min-w-[140px] ${
-                            isActive 
-                              ? 'border-purple-500 bg-purple-500/20 shadow-lg shadow-purple-500/20' 
-                              : isComplete 
-                                ? 'border-green-500/50 bg-green-500/10' 
-                                : 'border-gray-700 bg-gray-800/50'
-                          }`}
-                        >
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className="text-lg">{step.icon}</span>
-                            <span className={`text-sm font-medium ${isActive ? 'text-purple-300' : isComplete ? 'text-green-300' : 'text-gray-300'}`}>
-                              {step.name}
-                            </span>
+                      <div 
+                        key={index}
+                        className={`flex items-center gap-1.5 px-2 py-1 rounded border transition-all text-xs ${
+                          isActive 
+                            ? 'border-[#10a37f] bg-[#10a37f]/10' 
+                            : isComplete 
+                              ? 'border-[#10a37f]/50 bg-[#212121]' 
+                              : 'border-[#424242] bg-[#212121]'
+                        }`}
+                      >
+                        <span style={{ color: agentInfo?.color || '#b4b4b4' }}>
+                          {agentInfo?.icon || '○'}
+                        </span>
+                        <span className={isActive ? 'text-[#10a37f]' : isComplete ? 'text-white' : 'text-[#b4b4b4]'}>
+                          {step.name}
+                        </span>
+                        {isComplete && <span className="text-[#10a37f]">✓</span>}
+                        {isActive && (
+                          <div className="flex gap-0.5">
+                            <span className="w-1 h-1 bg-[#10a37f] rounded-full thinking-dot"></span>
+                            <span className="w-1 h-1 bg-[#10a37f] rounded-full thinking-dot"></span>
+                            <span className="w-1 h-1 bg-[#10a37f] rounded-full thinking-dot"></span>
                           </div>
-                          <p className="text-xs text-gray-500">{step.task}</p>
-                          {agentInfo && (
-                            <p className="text-[10px] text-gray-600 font-mono mt-1 truncate">
-                              {agentInfo.model}
-                            </p>
-                          )}
-                          {isComplete && (
-                            <span className="absolute -top-1 -right-1 w-5 h-5 bg-green-500 rounded-full flex items-center justify-center text-xs text-white">✓</span>
-                          )}
-                          {isActive && (
-                            <span className="absolute -top-1 -right-1 w-5 h-5 bg-purple-500 rounded-full flex items-center justify-center">
-                              <span className="w-2 h-2 bg-white rounded-full animate-ping"></span>
-                            </span>
-                          )}
-                        </div>
-                        {index < workflow.steps.length - 1 && (
-                          <svg className="w-6 h-6 text-gray-600 mx-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                          </svg>
                         )}
                       </div>
                     );
                   })}
                 </div>
 
-                {/* Progress */}
-                <div>
-                  <div className="flex justify-between text-xs text-gray-500 mb-1">
-                    <span>Progress</span>
-                    <span>{responses.length} / {workflow.steps.length} steps</span>
-                  </div>
-                  <div className="h-2 bg-gray-700 rounded-full overflow-hidden">
+                {/* Progress bar */}
+                <div className="flex items-center gap-2">
+                  <div className="flex-1 h-1 bg-[#212121] rounded-full overflow-hidden">
                     <div 
-                      className="h-full bg-gradient-to-r from-purple-500 to-pink-500 transition-all duration-500"
+                      className="h-full bg-[#10a37f] transition-all duration-500 rounded-full"
                       style={{ width: `${(responses.length / workflow.steps.length) * 100}%` }}
                     />
                   </div>
+                  <span className="text-xs text-[#565656]">{responses.length}/{workflow.steps.length}</span>
                 </div>
               </div>
             )}
 
             {/* Agent Responses */}
-            <div className="bg-gray-800/50 rounded-xl border border-purple-500/30 overflow-hidden">
-              <div className="px-4 py-3 border-b border-gray-700 flex items-center justify-between">
-                <h3 className="font-medium text-white">🤖 Agent Responses</h3>
-                {responses.length > 0 && (
-                  <span className="text-sm text-gray-400">{responses.length} response{responses.length !== 1 ? 's' : ''}</span>
-                )}
-              </div>
-              
-              <div className="max-h-[400px] overflow-y-auto p-4 space-y-4">
-                {responses.length === 0 && !isProcessing && (
-                  <div className="text-center py-12 text-gray-500">
-                    <span className="text-5xl mb-4 block">🤖</span>
-                    <p className="text-lg">Agent responses will appear here</p>
-                    <p className="text-sm mt-1">Submit a query to get started</p>
+            {responses.map((response, index) => (
+              <CollapsibleAgentResponse
+                key={`${index}-${response.agent_id}`}
+                response={response}
+                index={index}
+                isExpanded={expandedAgents.has(index)}
+                isStreaming={streamingIndex === index}
+                onToggle={() => toggleAgentExpand(index)}
+                onStreamComplete={() => handleStreamComplete(index)}
+              />
+            ))}
+
+            {/* Active Agent Thinking */}
+            {activeAgent && (
+              <div className="bg-[#2f2f2f] rounded-lg px-3 py-2 border border-[#10a37f]/30 animate-fadeIn">
+                <div className="flex items-center gap-2">
+                  <div className="flex gap-0.5">
+                    <span className="w-1 h-1 bg-[#10a37f] rounded-full thinking-dot"></span>
+                    <span className="w-1 h-1 bg-[#10a37f] rounded-full thinking-dot"></span>
+                    <span className="w-1 h-1 bg-[#10a37f] rounded-full thinking-dot"></span>
                   </div>
-                )}
-                
-                {responses.map((response, index) => {
-                  const agentInfo = AGENT_MODELS[response.agent_id];
-                  return (
-                    <div 
-                      key={index} 
-                      className="bg-gray-900/50 rounded-lg p-4 border-l-4"
-                      style={{ borderLeftColor: response.color || agentInfo?.color || '#6B7280' }}
+                  <span className="text-white text-xs font-medium">{activeAgent.name}</span>
+                  <span className="text-[#565656] text-xs">•</span>
+                  <span className="text-[#b4b4b4] text-xs">{activeAgent.task}</span>
+                </div>
+              </div>
+            )}
+
+            {/* Final Answer with Collapsible Thinking */}
+            {finalAnswer && (
+              <div className="animate-scaleIn space-y-2">
+                {/* Thinking/Process Dropdown - like ChatGPT */}
+                {completionData && responses.length > 0 && (
+                  <div className="bg-[#2f2f2f] rounded-lg border border-[#424242]">
+                    <button
+                      onClick={() => setThinkingExpanded(!thinkingExpanded)}
+                      className="w-full px-3 py-2 flex items-center justify-between hover:bg-[#3a3a3a] rounded-lg transition-colors"
                     >
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center gap-2">
-                          <span className="text-xl">{response.icon || agentInfo?.icon || '🤖'}</span>
+                      <div className="flex items-center gap-2 text-xs">
+                        <span className="text-[#565656]">◎</span>
+                        <span className="text-[#b4b4b4]">
+                          Thought for {completionData.total_time.toFixed(1)}s
+                        </span>
+                        <span className="text-[#565656]">
+                          • {responses.length} agents • {completionData.total_steps} steps
+                        </span>
+                      </div>
+                      <svg 
+                        className={`w-3 h-3 text-[#565656] transition-transform duration-200 ${thinkingExpanded ? 'rotate-180' : ''}`}
+                        fill="none" 
+                        stroke="currentColor" 
+                        viewBox="0 0 24 24"
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </button>
+                    
+                    {/* Expanded thinking content */}
+                    <div className={`overflow-hidden transition-all duration-300 ${
+                      thinkingExpanded ? 'max-h-[5000px] opacity-100' : 'max-h-0 opacity-0'
+                    }`}>
+                      <div className="px-3 pb-3 space-y-2">
+                        {/* Summary stats */}
+                        <div className="grid grid-cols-4 gap-1 p-2 bg-[#212121] rounded text-center">
                           <div>
-                            <p className="font-medium text-white">{response.agent_name}</p>
-                            <p className="text-xs text-gray-400">{response.task}</p>
+                            <p className="text-xs font-medium text-white">{completionData.total_time.toFixed(1)}s</p>
+                            <p className="text-[10px] text-[#565656]">Time</p>
+                          </div>
+                          <div>
+                            <p className="text-xs font-medium text-white">{completionData.total_steps}</p>
+                            <p className="text-[10px] text-[#565656]">Steps</p>
+                          </div>
+                          <div>
+                            <p className="text-xs font-medium text-white">{completionData.total_agents}</p>
+                            <p className="text-[10px] text-[#565656]">Agents</p>
+                          </div>
+                          <div>
+                            <p className="text-xs font-medium text-[#10a37f]">{completionData.final_confidence}%</p>
+                            <p className="text-[10px] text-[#565656]">Conf.</p>
                           </div>
                         </div>
-                        <div className="text-right">
-                          <span className={`text-sm font-medium ${getConfidenceColor(response.confidence)}`}>
-                            {response.confidence}%
-                          </span>
-                          <p className="text-xs text-gray-500">Step {response.step_number}</p>
+                        
+                        {/* Agent responses summary */}
+                        <div className="space-y-1.5">
+                          {responses.map((response, idx) => {
+                            const agentInfo = AGENT_MODELS[response.agent_id];
+                            return (
+                              <div key={idx} className="p-2 bg-[#212121] rounded">
+                                <div className="flex items-center gap-1.5 mb-1">
+                                  <span className="text-xs" style={{ color: agentInfo?.color || '#b4b4b4' }}>
+                                    {agentInfo?.icon || '○'}
+                                  </span>
+                                  <span className="text-xs font-medium text-white">{response.agent_name}</span>
+                                  <span className="text-[10px] text-[#565656]">• {response.task}</span>
+                                  <span className={`ml-auto text-[10px] ${
+                                    response.confidence >= 80 ? 'text-[#10a37f]' :
+                                    response.confidence >= 60 ? 'text-[#f59e0b]' : 'text-[#ef4444]'
+                                  }`}>
+                                    {response.confidence}%
+                                  </span>
+                                </div>
+                                <div className="text-[11px] text-[#b4b4b4] leading-relaxed">
+                                  {renderMarkdown(response.content)}
+                                </div>
+                              </div>
+                            );
+                          })}
                         </div>
                       </div>
-                      
-                      {agentInfo && (
-                        <p className="text-[10px] text-gray-500 font-mono mb-2 px-2 py-1 bg-gray-800 rounded inline-block">
-                          {agentInfo.model}
-                        </p>
-                      )}
-                      
-                      <div className="text-gray-300 text-sm leading-relaxed whitespace-pre-wrap max-h-48 overflow-y-auto">
-                        {response.content.length > 800 ? response.content.substring(0, 800) + '...' : response.content}
-                      </div>
-                      
-                      <div className="mt-3 h-1.5 bg-gray-700 rounded-full overflow-hidden">
-                        <div className={`h-full ${getConfidenceBarColor(response.confidence)}`} style={{ width: `${response.confidence}%` }} />
-                      </div>
-                    </div>
-                  );
-                })}
-                
-                {activeAgent && (
-                  <div className="flex items-center gap-3 p-4 bg-purple-500/10 border border-purple-500/30 rounded-lg">
-                    <div className="w-10 h-10 rounded-full bg-purple-500/30 flex items-center justify-center">
-                      <svg className="animate-spin h-5 w-5 text-purple-400" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                      </svg>
-                    </div>
-                    <div>
-                      <p className="text-purple-300 font-medium">{activeAgent.name} is thinking...</p>
-                      <p className="text-purple-400/70 text-sm">{activeAgent.task}</p>
                     </div>
                   </div>
                 )}
-                
-                <div ref={messagesEndRef} />
-              </div>
-            </div>
 
-            {/* Final Answer */}
-            {finalAnswer && (
-              <div className="bg-gradient-to-br from-green-900/30 to-emerald-900/30 rounded-xl p-6 border border-green-500/30">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-xl bg-green-500/20 flex items-center justify-center text-2xl">✅</div>
-                    <div>
-                      <h3 className="text-xl font-bold text-white">Final Answer</h3>
-                      <p className="text-sm text-gray-400">by {finalAnswer.source_agent} • {finalAnswer.strategy}</p>
+                {/* Main Final Answer - always visible */}
+                <div className="bg-[#212121] rounded-lg p-4">
+                  <div className="text-[#ececec] text-sm leading-relaxed">
+                    <StreamingText 
+                      text={finalAnswer.content} 
+                      isStreaming={finalAnswer.isStreaming || false}
+                      onComplete={() => setFinalAnswer(prev => prev ? { ...prev, isStreaming: false } : null)}
+                      useMarkdown={true}
+                    />
+                  </div>
+                  
+                  {/* Confidence bar at bottom */}
+                  {!finalAnswer.isStreaming && (
+                    <div className="mt-3 pt-2 border-t border-[#2f2f2f]">
+                      <div className="flex items-center justify-between text-[10px] text-[#565656]">
+                        <span>via {finalAnswer.source_agent} • {finalAnswer.strategy}</span>
+                        <span className={`${
+                          finalAnswer.confidence >= 80 ? 'text-[#10a37f]' :
+                          finalAnswer.confidence >= 60 ? 'text-[#f59e0b]' : 'text-[#ef4444]'
+                        }`}>
+                          {finalAnswer.confidence}% confident
+                        </span>
+                      </div>
                     </div>
-                  </div>
-                  {finalAnswer.evaluated_responses && (
-                    <span className="px-3 py-1 bg-green-500/20 text-green-400 rounded-full text-sm">
-                      {finalAnswer.evaluated_responses} evaluated
-                    </span>
                   )}
-                </div>
-                
-                <div className="bg-gray-900/50 rounded-lg p-4 mb-4 max-h-96 overflow-y-auto">
-                  <div className="text-gray-200 leading-relaxed whitespace-pre-wrap">{finalAnswer.content}</div>
-                </div>
-                
-                <div>
-                  <div className="flex justify-between text-sm mb-1">
-                    <span className="text-gray-400">Confidence</span>
-                    <span className={`font-medium ${getConfidenceColor(finalAnswer.confidence)}`}>{finalAnswer.confidence}%</span>
-                  </div>
-                  <div className="h-3 bg-gray-700 rounded-full overflow-hidden">
-                    <div className={`h-full ${getConfidenceBarColor(finalAnswer.confidence)}`} style={{ width: `${finalAnswer.confidence}%` }} />
-                  </div>
                 </div>
               </div>
             )}
 
             {/* Error */}
             {error && (
-              <div className="bg-red-900/30 border border-red-500/50 rounded-xl p-4">
-                <div className="flex items-center gap-2 text-red-400 mb-2">
-                  <span className="text-xl">❌</span>
-                  <span className="font-medium">Error</span>
+              <div className="bg-[#ef4444]/10 border border-[#ef4444]/30 rounded-lg px-3 py-2 animate-fadeIn">
+                <div className="flex items-center gap-2 text-[#ef4444]">
+                  <span className="text-xs">✕</span>
+                  <span className="text-xs">{error}</span>
                 </div>
-                <p className="text-red-300">{error}</p>
               </div>
             )}
+
+            <div ref={messagesEndRef} />
+          </div>
+        </div>
+
+        {/* Input Area */}
+        <div className="flex-shrink-0 border-t border-[#424242] bg-[#212121]">
+          <div className="max-w-3xl mx-auto px-4 py-3">
+            {/* Status indicator */}
+            {currentPhase !== 'idle' && currentPhase !== 'complete' && (
+              <div className="flex items-center gap-2 mb-2 px-1">
+                <div className="flex gap-0.5">
+                  <span className="w-1 h-1 bg-[#10a37f] rounded-full thinking-dot"></span>
+                  <span className="w-1 h-1 bg-[#10a37f] rounded-full thinking-dot"></span>
+                  <span className="w-1 h-1 bg-[#10a37f] rounded-full thinking-dot"></span>
+                </div>
+                <span className="text-xs text-[#b4b4b4]">{phaseMessage}</span>
+              </div>
+            )}
+            
+            <form onSubmit={handleSubmit} className="relative">
+              <div className="relative bg-[#2f2f2f] rounded-xl border border-[#424242] focus-within:border-[#565656] transition-colors">
+                <textarea
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      handleSubmit(e);
+                    }
+                  }}
+                  placeholder="Ask anything..."
+                  rows={1}
+                  className="w-full px-3 py-2.5 pr-10 bg-transparent text-white placeholder-[#6b6b6b] focus:outline-none resize-none text-sm max-h-32 scrollbar-hide"
+                  style={{ minHeight: '38px' }}
+                  disabled={isProcessing}
+                />
+                <button
+                  type="submit"
+                  disabled={isProcessing || !query.trim()}
+                  className="absolute right-1.5 bottom-1.5 w-7 h-7 rounded-lg bg-[#10a37f] hover:bg-[#1a7f64] disabled:bg-[#424242] disabled:cursor-not-allowed flex items-center justify-center transition-colors"
+                >
+                  {isProcessing ? (
+                    <svg className="animate-spin h-3 w-3 text-white" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" fill="none" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                    </svg>
+                  ) : (
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" className="text-white">
+                      <path d="M7 11L12 6L17 11M12 18V7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                  )}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       </div>

@@ -6,28 +6,28 @@ interface Props {
 
 export default function ConfidenceBar({ confidence, label, size = 'md' }: Props) {
   const getConfidenceColor = (score: number) => {
-    if (score >= 80) return 'from-green-500 to-emerald-500';
-    if (score >= 60) return 'from-yellow-500 to-orange-500';
-    return 'from-red-500 to-pink-500';
+    if (score >= 80) return 'bg-[#10a37f]';
+    if (score >= 60) return 'bg-[#f59e0b]';
+    return 'bg-[#ef4444]';
   };
 
   const getConfidenceTextColor = (score: number) => {
-    if (score >= 80) return 'text-green-400';
-    if (score >= 60) return 'text-yellow-400';
-    return 'text-red-400';
+    if (score >= 80) return 'text-[#10a37f]';
+    if (score >= 60) return 'text-[#f59e0b]';
+    return 'text-[#ef4444]';
   };
 
   const heights = {
-    sm: 'h-1.5',
-    md: 'h-2',
-    lg: 'h-3'
+    sm: 'h-1',
+    md: 'h-1.5',
+    lg: 'h-2'
   };
 
   return (
     <div>
       {label && (
-        <div className="flex justify-between items-center mb-1">
-          <span className="text-gray-400 text-xs">{label}</span>
+        <div className="flex justify-between items-center mb-1.5">
+          <span className="text-[#b4b4b4] text-xs">{label}</span>
           <span className={`text-sm font-medium ${getConfidenceTextColor(confidence)}`}>
             {confidence}%
           </span>
@@ -35,9 +35,9 @@ export default function ConfidenceBar({ confidence, label, size = 'md' }: Props)
       )}
       {!label && (
         <div className="flex items-center gap-2">
-          <div className={`flex-1 ${heights[size]} bg-gray-700 rounded-full overflow-hidden`}>
+          <div className={`flex-1 ${heights[size]} bg-[#212121] rounded-full overflow-hidden`}>
             <div 
-              className={`h-full bg-gradient-to-r ${getConfidenceColor(confidence)} rounded-full transition-all duration-500`}
+              className={`h-full ${getConfidenceColor(confidence)} rounded-full transition-all duration-500`}
               style={{ width: `${confidence}%` }}
             />
           </div>
@@ -47,9 +47,9 @@ export default function ConfidenceBar({ confidence, label, size = 'md' }: Props)
         </div>
       )}
       {label && (
-        <div className={`${heights[size]} bg-gray-700 rounded-full overflow-hidden`}>
+        <div className={`${heights[size]} bg-[#212121] rounded-full overflow-hidden`}>
           <div 
-            className={`h-full bg-gradient-to-r ${getConfidenceColor(confidence)} rounded-full transition-all duration-500`}
+            className={`h-full ${getConfidenceColor(confidence)} rounded-full transition-all duration-500`}
             style={{ width: `${confidence}%` }}
           />
         </div>

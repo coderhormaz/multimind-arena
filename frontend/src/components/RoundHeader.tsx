@@ -11,27 +11,29 @@ interface RoundHeaderProps {
 export default function RoundHeader({ round, status, title }: RoundHeaderProps) {
   return (
     <div className="flex items-center justify-center my-6">
-      <div className="flex-1 h-px bg-gradient-to-r from-transparent via-gray-600 to-transparent"></div>
-      <div className={`mx-4 px-4 py-2 rounded-full flex items-center gap-2 transition-all duration-300 ${
+      <div className="flex-1 h-px bg-gradient-to-r from-transparent via-[#424242] to-transparent"></div>
+      <div className={`mx-4 px-4 py-2 rounded-lg flex items-center gap-2 transition-all duration-300 ${
         status === 'active' 
-          ? 'bg-yellow-900/50 border border-yellow-500 text-yellow-400 animate-pulse' 
+          ? 'bg-[#f59e0b]/10 border border-[#f59e0b]/30 text-[#f59e0b]' 
           : status === 'complete'
-          ? 'bg-green-900/30 border border-green-700 text-green-400'
-          : 'bg-gray-800/50 border border-gray-700 text-gray-500'
+          ? 'bg-[#10a37f]/10 border border-[#10a37f]/30 text-[#10a37f]'
+          : 'bg-[#2f2f2f] border border-[#424242] text-[#565656]'
       }`}>
         {status === 'active' && (
-          <div className="w-2 h-2 rounded-full bg-yellow-400 animate-ping"></div>
+          <div className="flex gap-0.5">
+            <span className="w-1.5 h-1.5 bg-[#f59e0b] rounded-full thinking-dot"></span>
+            <span className="w-1.5 h-1.5 bg-[#f59e0b] rounded-full thinking-dot"></span>
+            <span className="w-1.5 h-1.5 bg-[#f59e0b] rounded-full thinking-dot"></span>
+          </div>
         )}
         {status === 'complete' && (
-          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-          </svg>
+          <span>✓</span>
         )}
-        <span className="font-semibold text-sm">
+        <span className="font-medium text-sm">
           {title || `Round ${round}`}
         </span>
       </div>
-      <div className="flex-1 h-px bg-gradient-to-r from-transparent via-gray-600 to-transparent"></div>
+      <div className="flex-1 h-px bg-gradient-to-r from-transparent via-[#424242] to-transparent"></div>
     </div>
   );
 }

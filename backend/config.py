@@ -51,18 +51,19 @@ MASTER_CONTROLLER = {
 
 # Specialized Agent Models (Free Tier)
 AGENTS = {
-    "gemini": {
-        "id": "google/gemini-2.0-flash-exp:free",
-        "name": "Gemini Flash",
-        "role": "Fast Reasoner",
-        "description": "Quick, efficient reasoning for initial analysis",
-        "temperature": 0.7,
-        "color": "#10B981",  # Green
-        "icon": "⚡",
-        "capabilities": ["fast_reasoning", "general_knowledge", "creative_thinking"],
-        "speed": "fast",
-        "depth": "moderate"
-    },
+    # TEMPORARILY DISABLED - Gemini rate limiting issues
+    # "gemini": {
+    #     "id": "google/gemini-2.0-flash-exp:free",
+    #     "name": "Gemini Flash",
+    #     "role": "Fast Reasoner",
+    #     "description": "Quick, efficient reasoning for initial analysis",
+    #     "temperature": 0.7,
+    #     "color": "#10B981",  # Green
+    #     "icon": "⚡",
+    #     "capabilities": ["fast_reasoning", "general_knowledge", "creative_thinking"],
+    #     "speed": "fast",
+    #     "depth": "moderate"
+    # },
     "deepseek": {
         "id": "tngtech/deepseek-r1t-chimera:free",
         "name": "DeepSeek Chimera",
@@ -112,7 +113,7 @@ AGENTS = {
         "depth": "deep"
     },
     "gemma": {
-        "id": "google/gemini-2.0-flash-exp:free",
+        "id": "meta-llama/llama-3.3-70b-instruct:free",
         "name": "Gemma Reasoner",
         "role": "Balanced Reasoner",
         "description": "Well-rounded reasoning with good balance of speed and depth",

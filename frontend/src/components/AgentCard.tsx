@@ -24,49 +24,56 @@ export default function AgentCard({
   borderClass,
 }: AgentCardProps) {
   return (
-    <div className={`rounded-xl border-2 ${borderClass} ${bgClass} overflow-hidden transition-all duration-300`}>
+    <div className="bg-[#2f2f2f] rounded-xl border border-[#424242] overflow-hidden transition-all duration-300 hover:border-[#565656]">
       {/* Header */}
-      <div className={`px-4 py-3 border-b ${borderClass} flex items-center justify-between`}>
+      <div className="px-4 py-3 border-b border-[#424242] flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className={`w-3 h-3 rounded-full ${
-            status === 'processing' ? 'animate-pulse bg-yellow-400' :
-            status === 'complete' ? 'bg-green-400' :
-            status === 'error' ? 'bg-red-400' :
-            'bg-gray-500'
+          <div className={`w-2 h-2 rounded-full ${
+            status === 'processing' ? 'bg-[#f59e0b] animate-pulse' :
+            status === 'complete' ? 'bg-[#10a37f]' :
+            status === 'error' ? 'bg-[#ef4444]' :
+            'bg-[#565656]'
           }`} />
           <div>
-            <h3 className={`font-semibold ${colorClass}`}>{title}</h3>
-            <p className="text-xs text-gray-400">{role}</p>
+            <h3 className="font-medium text-white text-sm">{title}</h3>
+            <p className="text-xs text-[#b4b4b4]">{role}</p>
           </div>
         </div>
         {processingTime !== undefined && status === 'complete' && (
-          <span className="text-xs text-gray-400 bg-gray-800 px-2 py-1 rounded">
+          <span className="text-xs text-[#b4b4b4] bg-[#212121] px-2 py-1 rounded-lg">
             {processingTime}s
           </span>
         )}
       </div>
       
       {/* Content */}
-      <div className="p-4 max-h-96 overflow-y-auto">
+      <div className="p-4 max-h-96 overflow-y-auto scrollbar-thin">
         {status === 'idle' && (
-          <p className="text-gray-500 text-sm italic">Waiting...</p>
+          <p className="text-[#565656] text-sm">Waiting...</p>
         )}
         
         {status === 'processing' && (
           <div className="flex items-center gap-3">
-            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-            <p className="text-gray-400 animate-pulse-glow">Processing...</p>
+            <div className="flex gap-1">
+              <span className="w-1.5 h-1.5 bg-[#10a37f] rounded-full thinking-dot"></span>
+              <span className="w-1.5 h-1.5 bg-[#10a37f] rounded-full thinking-dot"></span>
+              <span className="w-1.5 h-1.5 bg-[#10a37f] rounded-full thinking-dot"></span>
+            </div>
+            <p className="text-[#b4b4b4] text-sm">Processing...</p>
           </div>
         )}
         
         {status === 'complete' && content && (
-          <div className="prose text-sm text-gray-200 whitespace-pre-wrap">
+          <div className="prose text-sm text-[#ececec] whitespace-pre-wrap">
             {content}
           </div>
         )}
         
         {status === 'error' && (
-          <p className="text-red-400 text-sm">An error occurred. Please try again.</p>
+          <div className="flex items-center gap-2 text-[#ef4444]">
+            <span>✕</span>
+            <p className="text-sm">An error occurred. Please try again.</p>
+          </div>
         )}
       </div>
     </div>

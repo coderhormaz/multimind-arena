@@ -7,46 +7,58 @@ interface Props {
 }
 
 export default function FinalAnswer({ answer }: Props) {
+  const getConfidenceColor = (score: number) => {
+    if (score >= 80) return 'bg-[#10a37f]';
+    if (score >= 60) return 'bg-[#f59e0b]';
+    return 'bg-[#ef4444]';
+  };
+
+  const getConfidenceTextColor = (score: number) => {
+    if (score >= 80) return 'text-[#10a37f]';
+    if (score >= 60) return 'text-[#f59e0b]';
+    return 'text-[#ef4444]';
+  };
+
   return (
-    <div className="bg-gradient-to-br from-green-900/30 to-emerald-900/30 rounded-xl p-6 border border-green-500/30 animate-fadeIn">
+    <div className="bg-gradient-to-br from-[#10a37f]/10 to-[#10a37f]/5 rounded-xl p-5 border border-[#10a37f]/30 animate-scaleIn">
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
-          <span className="text-3xl">✅</span>
+          <div className="w-10 h-10 rounded-xl bg-[#10a37f]/20 flex items-center justify-center">
+            <span className="text-[#10a37f] text-xl">✓</span>
+          </div>
           <div>
-            <h3 className="text-xl font-bold text-white">Final Answer</h3>
-            <p className="text-sm text-gray-400">
-              by {answer.source_agent} • Strategy: {answer.strategy}
+            <h3 className="text-lg font-semibold text-white">Final Answer</h3>
+            <p className="text-xs text-[#b4b4b4]">
+              via {answer.source_agent} • {answer.strategy}
             </p>
           </div>
         </div>
         {answer.evaluated_responses && (
-          <span className="px-3 py-1 bg-green-500/20 text-green-400 rounded-full text-sm">
-            {answer.evaluated_responses} responses evaluated
+          <span className="px-3 py-1 bg-[#10a37f]/20 text-[#10a37f] rounded-full text-sm">
+            {answer.evaluated_responses} evaluated
           </span>
         )}
       </div>
       
       {/* Answer Content */}
-      <div className="bg-gray-900/50 rounded-lg p-4 mb-4">
-        <div className="text-gray-200 leading-relaxed whitespace-pre-wrap">
+      <div className="bg-[#212121] rounded-lg p-4 mb-4">
+        <div className="text-[#ececec] leading-relaxed whitespace-pre-wrap prose">
           {answer.content}
         </div>
       </div>
       
       {/* Confidence */}
-      <div className="mt-4">
-        <div className="flex justify-between text-sm mb-1">
-          <span className="text-gray-400">Answer Confidence</span>
-          <span className="text-white font-medium">{answer.confidence}%</span>
+      <div>
+        <div className="flex justify-between text-sm mb-2">
+          <span className="text-[#b4b4b4]">Confidence</span>
+          <span className={`font-medium ${getConfidenceTextColor(answer.confidence)}`}>
+            {answer.confidence}%
+          </span>
         </div>
-        <div className="h-3 bg-gray-700 rounded-full overflow-hidden">
+        <div className="h-2 bg-[#212121] rounded-full overflow-hidden">
           <div 
-            className={`h-full transition-all duration-500 ${
-              answer.confidence >= 80 ? 'bg-gradient-to-r from-green-500 to-emerald-500' :
-              answer.confidence >= 60 ? 'bg-gradient-to-r from-yellow-500 to-amber-500' :
-              'bg-gradient-to-r from-red-500 to-orange-500'
-            }`}
+            className={`h-full ${getConfidenceColor(answer.confidence)} rounded-full transition-all duration-500`}
             style={{ width: `${answer.confidence}%` }}
           />
         </div>

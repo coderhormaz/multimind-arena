@@ -11,16 +11,16 @@ from typing import Optional
 from config import OPENROUTER_API_KEY, OPENROUTER_BASE_URL
 
 # ============================================================
-# RATE LIMITING FOR PAID TIER
-# 20 req/min = 1 request every 3 seconds minimum
-# 1000 req/day with credits
+# RATE LIMITING - More conservative for free tier models
+# Gemini and other free models have stricter limits
 # ============================================================
 
 _last_call_time = 0
-_min_delay = 3.0  # 3 seconds between calls (safe for 20/min)
+_min_delay = 5.0  # 5 seconds between calls (safer)
 _request_count = 0
-_daily_limit = 950  # 1000/day with credits, leave small buffer
-_minute_requests = []  # Track requests per minute
+_daily_limit = 950
+_minute_requests = []
+_model_last_call = {}  # Per-model tracking for stricter models
 
 
 class BaseAgent:
@@ -33,37 +33,65 @@ class BaseAgent:
         self.temperature = temperature
         self.api_key = OPENROUTER_API_KEY
         self.base_url = OPENROUTER_BASE_URL
-        self.max_retries = 5  # More retries with paid tier
-        self.base_delay = 5.0  # Base delay for retries
+        self.max_retries = 6  # More retries
+        self.base_delay = 10.0  # Longer base delay
+        
+        # Model-specific delays (free tier models need longer waits)
+        self.model_delay = self._get_model_delay()
+    
+    def _get_model_delay(self) -> float:
+        """Get model-specific delay - Gemini and free models need longer waits"""
+        model_lower = self.model_id.lower()
+        if 'gemini' in model_lower:
+            return 8.0  # Gemini is very strict
+        elif 'deepseek' in model_lower:
+            return 6.0
+        elif 'qwen' in model_lower:
+            return 6.0
+        elif 'llama' in model_lower:
+            return 5.0
+        elif 'gemma' in model_lower:
+            return 6.0
+        else:
+            return 5.0
     
     async def _wait_for_rate_limit(self):
         """
-        Rate limiting for paid tier:
-        - Minimum 3s between calls (respects 20/min)
-        - Track per-minute to stay under 20/min
+        Rate limiting with per-model tracking for stricter models like Gemini
         """
-        global _last_call_time, _request_count, _minute_requests
+        global _last_call_time, _request_count, _minute_requests, _model_last_call
         current_time = time.time()
         
         # Clean up old minute requests (older than 60s)
         _minute_requests = [t for t in _minute_requests if current_time - t < 60]
         
         # If too many requests in last minute, wait longer
-        if len(_minute_requests) >= 15:  # Stay well under 20/min
-            wait_time = 60 - (current_time - _minute_requests[0]) + 5
-            print(f"[{self.name}] ⚠️ Near minute limit ({len(_minute_requests)}/15). Waiting {wait_time:.0f}s...")
+        if len(_minute_requests) >= 10:  # Very conservative - 10/min max
+            wait_time = 60 - (current_time - _minute_requests[0]) + 10
+            print(f"[{self.name}] ⚠️ Near minute limit ({len(_minute_requests)}/10). Waiting {wait_time:.0f}s...")
             await asyncio.sleep(wait_time)
             current_time = time.time()
         
-        # Minimum delay between calls
+        # Per-model rate limiting (especially for Gemini)
+        model_key = self.model_id.split('/')[0]  # e.g., "google" from "google/gemini..."
+        if model_key in _model_last_call:
+            model_elapsed = current_time - _model_last_call[model_key]
+            if model_elapsed < self.model_delay:
+                wait_time = self.model_delay - model_elapsed + random.uniform(1, 3)
+                print(f"[{self.name}] ⏳ Model-specific delay: {wait_time:.1f}s...")
+                await asyncio.sleep(wait_time)
+                current_time = time.time()
+        
+        # Global minimum delay between any calls
         elapsed = current_time - _last_call_time
         if elapsed < _min_delay:
             wait_time = _min_delay - elapsed + random.uniform(0.5, 2.0)
-            print(f"[{self.name}] ⏳ Rate limit delay: {wait_time:.1f}s...")
+            print(f"[{self.name}] ⏳ Global rate limit delay: {wait_time:.1f}s...")
             await asyncio.sleep(wait_time)
         
         # Update tracking
         _last_call_time = time.time()
+        _model_last_call[model_key] = _last_call_time
         _minute_requests.append(_last_call_time)
         _request_count += 1
         
@@ -71,7 +99,7 @@ class BaseAgent:
         if _request_count >= _daily_limit - 5:
             print(f"[{self.name}] ⚠️ WARNING: Approaching daily limit ({_request_count}/{_daily_limit})")
         
-        print(f"[{self.name}] 📊 Request #{_request_count} (minute: {len(_minute_requests)}/15)")
+        print(f"[{self.name}] 📊 Request #{_request_count} (minute: {len(_minute_requests)}/10)")
     
     async def generate(self, prompt: str, system_prompt: str = None) -> str:
         """
@@ -118,11 +146,12 @@ class BaseAgent:
                         json=payload
                     )
                     
-                    # Handle rate limiting - wait much longer
+                    # Handle rate limiting - exponential backoff
                     if response.status_code == 429:
-                        retry_after = int(response.headers.get("Retry-After", 30))
-                        wait_time = max(retry_after, 30) + random.uniform(5, 15)
-                        print(f"[{self.name}] 🛑 Rate limited! Waiting {wait_time:.0f}s...")
+                        retry_after = int(response.headers.get("Retry-After", 60))
+                        # Exponential backoff: 60s, 90s, 135s, etc.
+                        wait_time = max(retry_after, 60) * (1.5 ** attempt) + random.uniform(10, 30)
+                        print(f"[{self.name}] 🛑 Rate limited (429)! Waiting {wait_time:.0f}s (attempt {attempt + 1})...")
                         await asyncio.sleep(wait_time)
                         continue
                     
@@ -153,15 +182,17 @@ class BaseAgent:
                 last_error = e
                 status = e.response.status_code
                 if status == 429:
-                    wait_time = 30 + (15 * attempt) + random.uniform(5, 10)
-                    print(f"[{self.name}] 🛑 Rate limited ({status}). Waiting {wait_time:.0f}s...")
+                    # Exponential backoff for rate limits
+                    wait_time = 60 * (1.5 ** attempt) + random.uniform(15, 30)
+                    print(f"[{self.name}] 🛑 Rate limited ({status}). Waiting {wait_time:.0f}s (attempt {attempt + 1})...")
                     await asyncio.sleep(wait_time)
                 elif status in [400, 422]:
                     print(f"[{self.name}] ❌ Bad request: {e.response.text[:200]}")
                     return f"[Error: Request issue] {e.response.text[:100]}"
                 else:
-                    print(f"[{self.name}] ⚠️ HTTP {status}: {str(e)[:80]}")
-                    await asyncio.sleep(self.base_delay * (attempt + 1))
+                    wait_time = self.base_delay * (1.5 ** attempt)
+                    print(f"[{self.name}] ⚠️ HTTP {status}: {str(e)[:80]}. Wait {wait_time:.0f}s...")
+                    await asyncio.sleep(wait_time)
                     
             except asyncio.TimeoutError:
                 print(f"[{self.name}] ⏰ Timeout. Retrying...")
