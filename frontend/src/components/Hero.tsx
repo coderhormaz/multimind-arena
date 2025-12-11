@@ -23,9 +23,9 @@ export function Hero() {
         <div className="mb-4 animate-fadeIn">
           <div className="relative inline-flex items-center gap-2 rounded-full border border-gray-200 bg-white/80 px-3 py-1.5 text-xs backdrop-blur-sm shadow-sm">
             <Shapes className="h-3.5 w-3.5 text-gray-600" /> 
-            <span className="text-gray-600">Introducing JHC.</span>
+            <span className="text-gray-600">Introducing MultiMind Arena.</span>
             <Link
-              href="/products/jhc"
+              href="/chat"
               className="ml-1 flex items-center font-semibold text-gray-900 transition-colors hover:text-gray-600"
             >
               Explore
@@ -78,7 +78,7 @@ export function Hero() {
           </p>
           
           <div className="mt-6 flex flex-wrap justify-center gap-3">
-            <Link href="/dashboard">
+            <Link href="/chat">
               <Button 
                 variant="default" 
                 size="lg"
@@ -87,7 +87,7 @@ export function Hero() {
                 Start Project
               </Button>
             </Link>
-            <Link href="/about">
+            <Link href="/chat">
               <Button 
                 variant="outline" 
                 size="lg"

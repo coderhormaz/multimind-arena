@@ -26,7 +26,7 @@
 }
 
 html {
-  scroll-behavior: smooth;
+  /* scroll-behavior: smooth; */
 }
 
 body {
@@ -103,6 +103,26 @@ body {
   background: linear-gradient(90deg, transparent, rgba(255,255,255,0.05), transparent);
   background-size: 200% 100%;
   animation: shimmer 2s infinite;
+}
+
+/* Slow shimmer for input processing */
+@keyframes shimmer-slow {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(200%); }
+}
+
+.animate-shimmer-slow {
+  animation: shimmer-slow 2s ease-in-out infinite;
+}
+
+/* Input focus glow */
+@keyframes input-glow {
+  0%, 100% { box-shadow: 0 0 0 1px rgba(16, 163, 127, 0.1), 0 4px 20px rgba(0,0,0,0.3); }
+  50% { box-shadow: 0 0 0 2px rgba(16, 163, 127, 0.2), 0 4px 25px rgba(0,0,0,0.35); }
+}
+
+.input-glow {
+  animation: input-glow 2s ease-in-out infinite;
 }
 
 /* Fade in animation */
