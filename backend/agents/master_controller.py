@@ -158,9 +158,10 @@ Agents: {list(AGENTS.keys())}
         
         # Select primary and secondary agents based on query type
         # NOTE: Gemini temporarily disabled due to rate limiting
+        # For coding: Only Qwen Coder does the work, Llama Judge just reviews
         if query_type == "coding":
             primary_agent = "qwen_coder"
-            secondary_agent = "gpt_critic"
+            secondary_agent = "llama_judge"  # Judge reviews Qwen's code
         elif query_type == "math":
             primary_agent = "deepseek"
             secondary_agent = "llama_judge"
@@ -171,31 +172,62 @@ Agents: {list(AGENTS.keys())}
             primary_agent = "deepseek"
             secondary_agent = "llama_judge"
         
-        # Always use 2 agents + synthesis
-        steps = [
-            {
-                "step_number": 1,
-                "agent_id": primary_agent,
-                "task": "initial_reasoning",
-                "instruction": f"Analyze and answer this query thoroughly: {query[:200]}",
-                "depends_on": [],
-                "agent_name": AGENTS[primary_agent]["name"],
-                "agent_role": AGENTS[primary_agent]["role"],
-                "icon": AGENTS[primary_agent]["icon"],
-                "color": AGENTS[primary_agent]["color"]
-            },
-            {
-                "step_number": 2,
-                "agent_id": secondary_agent,
-                "task": "deep_analysis",
-                "instruction": f"Provide additional analysis, verify facts, add insights: {query[:200]}",
-                "depends_on": [1],
-                "agent_name": AGENTS[secondary_agent]["name"],
-                "agent_role": AGENTS[secondary_agent]["role"],
-                "icon": AGENTS[secondary_agent]["icon"],
-                "color": AGENTS[secondary_agent]["color"]
+        # For coding tasks, Qwen does the coding, Llama just validates (no modification)
+        if query_type == "coding":
+            steps = [
+                {
+                    "step_number": 1,
+                    "agent_id": "qwen_coder",
+                    "task": "code_implementation",
+                    "instruction": f"Write clean, complete, working code for: {query[:200]}. Provide the FULL code, not shortened.",
+                    "depends_on": [],
+                    "agent_name": AGENTS["qwen_coder"]["name"],
+                    "agent_role": AGENTS["qwen_coder"]["role"],
+                    "icon": AGENTS["qwen_coder"]["icon"],
+                    "color": AGENTS["qwen_coder"]["color"]
+                }
+            ]
+            # For coding: use code_direct strategy - returns Qwen's code directly
+            return {
+                "workflow_name": "Coding Workflow",
+                "strategy": "Direct code from Qwen Coder",
+                "complexity_level": "coding",
+                "debate_enabled": False,
+                "debate_rounds": 0,
+                "steps": steps,
+                "agent_configs": {"qwen_coder": AGENTS["qwen_coder"].copy()},
+                "fusion_strategy": "code_direct",  # New strategy: use code directly
+                "success_criteria": "Working, complete code",
+                "total_expected_calls": 1,
+                "paid_mode": True,
+                "is_coding": True
             }
-        ]
+        else:
+            # Non-coding: use primary + secondary agents
+            steps = [
+                {
+                    "step_number": 1,
+                    "agent_id": primary_agent,
+                    "task": "initial_reasoning",
+                    "instruction": f"Analyze and answer this query thoroughly: {query[:200]}",
+                    "depends_on": [],
+                    "agent_name": AGENTS[primary_agent]["name"],
+                    "agent_role": AGENTS[primary_agent]["role"],
+                    "icon": AGENTS[primary_agent]["icon"],
+                    "color": AGENTS[primary_agent]["color"]
+                },
+                {
+                    "step_number": 2,
+                    "agent_id": secondary_agent,
+                    "task": "deep_analysis",
+                    "instruction": f"Provide additional analysis, verify facts, add insights: {query[:200]}",
+                    "depends_on": [1],
+                    "agent_name": AGENTS[secondary_agent]["name"],
+                    "agent_role": AGENTS[secondary_agent]["role"],
+                    "icon": AGENTS[secondary_agent]["icon"],
+                    "color": AGENTS[secondary_agent]["color"]
+                }
+            ]
         
         # For complex queries, add a third agent
         if complexity > 60:
@@ -239,6 +271,7 @@ Agents: {list(AGENTS.keys())}
         
         # Select best single agent for the task
         # NOTE: Gemini temporarily disabled due to rate limiting
+        # For coding: Only Qwen Coder - Llama just judges
         if query_type == "coding":
             primary_agent = "qwen_coder"
         elif query_type == "math":
@@ -248,32 +281,65 @@ Agents: {list(AGENTS.keys())}
         else:
             primary_agent = "deepseek"  # Default (was gemini - temp disabled)
         
-        # Build simple workflow - just 1 agent for most queries
-        steps = [{
-            "step_number": 1,
-            "agent_id": primary_agent,
-            "task": "initial_reasoning",
-            "instruction": f"Answer this query thoroughly: {query[:200]}",
-            "depends_on": [],
-            "agent_name": AGENTS[primary_agent]["name"],
-            "agent_role": AGENTS[primary_agent]["role"],
-            "icon": AGENTS[primary_agent]["icon"],
-            "color": AGENTS[primary_agent]["color"]
-        }]
-        
-        # Only add judge for complex queries (saves 1 API call otherwise)
-        if complexity > 70:
-            steps.append({
-                "step_number": 2,
-                "agent_id": "llama_judge",
-                "task": "final_verdict",
-                "instruction": "Review and provide final synthesized answer",
-                "depends_on": [1],
-                "agent_name": AGENTS["llama_judge"]["name"],
-                "agent_role": AGENTS["llama_judge"]["role"],
-                "icon": AGENTS["llama_judge"]["icon"],
-                "color": AGENTS["llama_judge"]["color"]
-            })
+        # For coding tasks: Qwen codes, use code directly (no judge modification)
+        if query_type == "coding":
+            steps = [
+                {
+                    "step_number": 1,
+                    "agent_id": "qwen_coder",
+                    "task": "code_implementation",
+                    "instruction": f"Write clean, complete, working code for: {query[:200]}. Provide the FULL code, not shortened.",
+                    "depends_on": [],
+                    "agent_name": AGENTS["qwen_coder"]["name"],
+                    "agent_role": AGENTS["qwen_coder"]["role"],
+                    "icon": AGENTS["qwen_coder"]["icon"],
+                    "color": AGENTS["qwen_coder"]["color"]
+                }
+            ]
+            # Build agent configs
+            agent_configs = {"qwen_coder": AGENTS["qwen_coder"].copy()}
+            
+            return {
+                "workflow_name": "Coding Workflow",
+                "strategy": "Direct code from Qwen Coder",
+                "complexity_level": "coding",
+                "debate_enabled": False,
+                "debate_rounds": 0,
+                "steps": steps,
+                "agent_configs": agent_configs,
+                "fusion_strategy": "code_direct",  # Use code directly
+                "success_criteria": "Working, complete code",
+                "total_expected_calls": 1,
+                "free_tier_optimized": True,
+                "is_coding": True
+            }
+        else:
+            # Non-coding: Build simple workflow - just 1 agent for most queries
+            steps = [{
+                "step_number": 1,
+                "agent_id": primary_agent,
+                "task": "initial_reasoning",
+                "instruction": f"Answer this query thoroughly: {query[:200]}",
+                "depends_on": [],
+                "agent_name": AGENTS[primary_agent]["name"],
+                "agent_role": AGENTS[primary_agent]["role"],
+                "icon": AGENTS[primary_agent]["icon"],
+                "color": AGENTS[primary_agent]["color"]
+            }]
+            
+            # Only add judge for complex queries (saves 1 API call otherwise)
+            if complexity > 70:
+                steps.append({
+                    "step_number": 2,
+                    "agent_id": "llama_judge",
+                    "task": "final_verdict",
+                    "instruction": "Review and provide final synthesized answer",
+                    "depends_on": [1],
+                    "agent_name": AGENTS["llama_judge"]["name"],
+                    "agent_role": AGENTS["llama_judge"]["role"],
+                    "icon": AGENTS["llama_judge"]["icon"],
+                    "color": AGENTS["llama_judge"]["color"]
+                })
         
         # Build agent configs
         agent_configs = {}

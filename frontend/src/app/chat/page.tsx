@@ -2,6 +2,112 @@
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 
+// Code Block Component with Copy and Preview buttons
+function CodeBlock({ code, language, blockKey }: { code: string; language: string; blockKey: string }) {
+  const [copied, setCopied] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
+  
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(code);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy:', err);
+    }
+  };
+  
+  // Check if code is previewable (HTML, CSS, or has HTML structure)
+  const isPreviewable = language === 'html' || 
+    language === 'css' || 
+    language === 'jsx' ||
+    language === 'tsx' ||
+    code.includes('<') && code.includes('>');
+  
+  const getPreviewContent = () => {
+    if (language === 'html' || (code.includes('<') && code.includes('>'))) {
+      // If it's just CSS, wrap it
+      if (language === 'css') {
+        return `<!DOCTYPE html><html><head><style>${code}</style></head><body><div class="preview">Preview Content</div></body></html>`;
+      }
+      // If it doesn't have html/body tags, wrap it
+      if (!code.toLowerCase().includes('<html') && !code.toLowerCase().includes('<!doctype')) {
+        return `<!DOCTYPE html><html><head><style>body{font-family:system-ui;padding:20px;background:#1a1a1a;color:#fff;}</style></head><body>${code}</body></html>`;
+      }
+      return code;
+    }
+    return code;
+  };
+  
+  return (
+    <div className="relative group my-3">
+      {/* Header bar with language and buttons */}
+      <div className="flex items-center justify-between bg-[#1a1a1a] px-3 py-1.5 rounded-t-lg border border-b-0 border-[#333]">
+        <span className="text-[10px] text-[#888] font-mono uppercase">{language || 'code'}</span>
+        <div className="flex items-center gap-1">
+          {isPreviewable && (
+            <button
+              onClick={() => setShowPreview(!showPreview)}
+              className={`flex items-center gap-1 px-2 py-1 rounded text-[10px] transition-all ${
+                showPreview 
+                  ? 'bg-[#10a37f] text-white' 
+                  : 'bg-[#2a2a2a] text-[#888] hover:text-white hover:bg-[#333]'
+              }`}
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                <circle cx="12" cy="12" r="3" />
+              </svg>
+              {showPreview ? 'Code' : 'Preview'}
+            </button>
+          )}
+          <button
+            onClick={handleCopy}
+            className={`flex items-center gap-1 px-2 py-1 rounded text-[10px] transition-all ${
+              copied 
+                ? 'bg-[#10a37f] text-white' 
+                : 'bg-[#2a2a2a] text-[#888] hover:text-white hover:bg-[#333]'
+            }`}
+          >
+            {copied ? (
+              <>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M20 6L9 17l-5-5" />
+                </svg>
+                Copied!
+              </>
+            ) : (
+              <>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                  <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" />
+                </svg>
+                Copy
+              </>
+            )}
+          </button>
+        </div>
+      </div>
+      
+      {/* Code or Preview content */}
+      {showPreview && isPreviewable ? (
+        <div className="border border-t-0 border-[#333] rounded-b-lg overflow-hidden">
+          <iframe
+            srcDoc={getPreviewContent()}
+            className="w-full h-64 bg-white"
+            sandbox="allow-scripts"
+            title="Code Preview"
+          />
+        </div>
+      ) : (
+        <pre className="bg-[#0d0d0d] rounded-b-lg p-3 overflow-x-auto border border-t-0 border-[#333]">
+          <code className="text-sm font-mono text-[#e5e5e5] whitespace-pre">{code}</code>
+        </pre>
+      )}
+    </div>
+  );
+}
+
 // Agent model mapping for display - using symbols instead of emojis
 const AGENT_MODELS: Record<string, { model: string; icon: string; color: string; role: string }> = {
   'gemini': { model: 'google/gemini-2.0-flash-exp:free', icon: '◇', color: '#10a37f', role: 'Fast Reasoner' },
@@ -305,9 +411,12 @@ function renderMarkdown(text: string): React.ReactNode {
       } else {
         inCodeBlock = false;
         elements.push(
-          <pre key={`code-${lineIndex}`} className="bg-[#171717] rounded-lg p-3 my-2 overflow-x-auto">
-            <code className="text-sm font-mono text-[#e5e5e5]">{codeContent}</code>
-          </pre>
+          <CodeBlock 
+            key={`code-${lineIndex}`} 
+            code={codeContent} 
+            language={codeLanguage}
+            blockKey={`code-${lineIndex}`}
+          />
         );
       }
       return;

@@ -357,7 +357,10 @@ class AnswerSynthesizer:
         """
         fusion_strategy = workflow.get("fusion_strategy", "judge_picks")
         
-        if fusion_strategy == "best_answer":
+        if fusion_strategy == "code_direct":
+            # For coding: return the coder's response directly without modification
+            return self._return_code_direct(responses)
+        elif fusion_strategy == "best_answer":
             return self._pick_best_by_confidence(responses)
         elif fusion_strategy == "synthesis":
             return await self._synthesize_all(responses, query)
@@ -365,6 +368,27 @@ class AnswerSynthesizer:
             return await self._weighted_synthesis(responses, query)
         else:  # judge_picks
             return await self._judge_picks(responses, query)
+    
+    def _return_code_direct(self, responses: List[Dict]) -> Dict[str, Any]:
+        """Return the coder's response directly without any modification"""
+        if not responses:
+            return {"content": "No code generated", "confidence": 0}
+        
+        # Get the Qwen Coder response (should be first/only for coding tasks)
+        coder_response = responses[0]
+        for r in responses:
+            if r.get("agent_id") == "qwen_coder":
+                coder_response = r
+                break
+        
+        return {
+            "type": "final_answer",
+            "strategy": "code_direct",
+            "content": coder_response.get("content", ""),
+            "confidence": coder_response.get("confidence", 85),
+            "source_agent": coder_response.get("agent_name", "Qwen Coder"),
+            "source_agent_id": coder_response.get("agent_id", "qwen_coder")
+        }
     
     def _pick_best_by_confidence(self, responses: List[Dict]) -> Dict[str, Any]:
         """Pick the response with highest confidence"""
