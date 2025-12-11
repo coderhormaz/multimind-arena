@@ -1212,7 +1212,7 @@ export default function Home() {
             )}
             
             <form onSubmit={handleSubmit} className="relative">
-              <div className="relative bg-[#2f2f2f] rounded-xl border border-[#424242] focus-within:border-[#565656] transition-colors">
+              <div className="relative bg-[#2f2f2f] rounded-xl border border-[#424242] focus-within:border-[#10a37f] transition-all duration-200" style={{ outline: 'none' }}>
                 <textarea
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
@@ -1224,8 +1224,8 @@ export default function Home() {
                   }}
                   placeholder="Ask anything..."
                   rows={1}
-                  className="w-full px-3 py-2.5 pr-10 bg-transparent text-white placeholder-[#6b6b6b] focus:outline-none resize-none text-sm max-h-32 scrollbar-hide"
-                  style={{ minHeight: '38px' }}
+                  className="w-full px-3 py-2.5 pr-10 bg-transparent text-white placeholder-[#6b6b6b] resize-none text-sm max-h-32 scrollbar-hide"
+                  style={{ minHeight: '38px', outline: 'none', border: 'none', boxShadow: 'none' }}
                   disabled={isProcessing}
                 />
                 <button
