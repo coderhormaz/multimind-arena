@@ -13,8 +13,8 @@ export default function HomePage() {
         title="Get In Touch"
         description="Have questions about our AI multi-agent system? We'd love to hear from you. Reach out for demos, partnerships, or support."
         phone="(555) 123-4567"
-        email="hello@jhc.ai"
-        web={{ label: "jhc.ai", url: "https://github.com/yourusername/jhc" }}
+        email="hello@multimind-arena.example"
+        web={{ label: "multimind-arena.example", url: "https://github.com/yourusername/jhc" }}
       />
       <Footer
         logo={<Brain className="h-10 w-10" />}
