@@ -1,4 +1,4 @@
-# Multi-Agent AI Collaboration System
+# MultiMind Arena
 
 A sophisticated multi-agent AI system where multiple specialized AI agents collaborate to answer queries, with a Master Controller orchestrating the workflow.
 
@@ -14,7 +14,6 @@ A sophisticated multi-agent AI system where multiple specialized AI agents colla
 - **Dynamic Workflow**: Automatically designs optimal workflow based on query complexity
 - **Real-time Streaming**: SSE-based updates for live progress
 - **Final Synthesis**: Master combines all agent insights into comprehensive answer
-
 ## 🏗️ Architecture
 
 ```
@@ -72,7 +71,7 @@ Visit `http://localhost:3000` to use the application.
 ## 📁 Project Structure
 
 ```
-JHC/
+MultiMind Arena/
 ├── backend/
 │   ├── agents/
 │   │   ├── base.py              # Base agent with rate limiting
