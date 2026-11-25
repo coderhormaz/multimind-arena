@@ -14,6 +14,7 @@ A sophisticated multi-agent AI system where multiple specialized AI agents colla
 - **Dynamic Workflow**: Automatically designs optimal workflow based on query complexity
 - **Real-time Streaming**: SSE-based updates for live progress
 - **Final Synthesis**: Master combines all agent insights into comprehensive answer
+
 ## 🏗️ Architecture
 
 ```
