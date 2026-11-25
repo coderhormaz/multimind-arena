@@ -32,4 +32,9 @@ Thumbs.db
 logs/
 *.log
 
+# Environment files
+.env
+.env.*
+*.env
+*.env.*
 

@@ -75,21 +75,71 @@ Visit `http://localhost:3000` to use the application.
 MultiMind Arena/
 ├── backend/
 │   ├── agents/
-│   │   ├── base.py              # Base agent with rate limiting
-│   │   ├── master_controller.py # Workflow orchestration
-│   │   ├── master_orchestrator.py # Main coordinator
-│   │   ├── workflow_engine.py   # Executes workflows
-│   │   └── memory_engine.py     # Context memory
-│   ├── config.py                # Configuration
-│   ├── main.py                  # FastAPI server
+│   │   ├── __init__.py
+│   │   ├── base.py
+│   │   ├── critic.py
+│   │   ├── debate_orchestrator.py
+│   │   ├── master_controller.py
+│   │   ├── master_orchestrator.py
+│   │   ├── memory_engine.py
+│   │   ├── orchestrator.py
+│   │   ├── reasoner.py
+│   │   ├── reasoner_b.py
+│   │   ├── referee.py
+│   │   └── workflow_engine.py
+│   ├── config.py
+│   ├── main.py
 │   └── requirements.txt
 ├── frontend/
+│   ├── public/
+│   │   ├── file.svg
+│   │   ├── globe.svg
+│   │   ├── next.svg
+│   │   ├── vercel.svg
+│   │   └── window.svg
 │   ├── src/
 │   │   ├── app/
-│   │   │   └── page.tsx         # Main UI
-│   │   ├── components/          # React components
-│   │   └── types/               # TypeScript types
-│   └── package.json
+│   │   │   ├── chat/page.tsx
+│   │   │   ├── favicon.ico
+│   │   │   ├── globals.css
+│   │   │   ├── home/page.tsx
+│   │   │   ├── layout.tsx
+│   │   │   └── page.tsx
+│   │   ├── components/
+│   │   │   ├── AgentCard.tsx
+│   │   │   ├── AgentMessage.tsx
+│   │   │   ├── AnalysisCard.tsx
+│   │   │   ├── ConfidenceBar.tsx
+│   │   │   ├── DebateHistoryPanel.tsx
+│   │   │   ├── DebateMessage.tsx
+│   │   │   ├── DebateStatsPanel.tsx
+│   │   │   ├── FinalAnswer.tsx
+│   │   │   ├── FinalVerdict.tsx
+│   │   │   ├── Hero.tsx
+│   │   │   ├── HistoryPanel.tsx
+│   │   │   ├── RoundHeader.tsx
+│   │   │   ├── StatsPanel.tsx
+│   │   │   ├── WorkflowVisualization.tsx
+│   │   │   └── ui/
+│   │   │       ├── button.tsx
+│   │   │       ├── canvas.tsx
+│   │   │       ├── contact-2.tsx
+│   │   │       ├── feature-section-with-hover-effects.tsx
+│   │   │       ├── footer.tsx
+│   │   │       ├── input.tsx
+│   │   │       ├── label.tsx
+│   │   │       └── textarea.tsx
+│   │   ├── lib/utils.ts
+│   │   └── types/index.ts
+│   ├── .gitignore
+│   ├── eslint.config.mjs
+│   ├── next.config.ts
+│   ├── package-lock.json
+│   ├── package.json
+│   ├── postcss.config.mjs
+│   ├── README.md
+│   └── tsconfig.json
+├── .gitignore
 └── README.md
 ```
 
